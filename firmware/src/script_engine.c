@@ -87,9 +87,9 @@ static uint8_t read_byte(void) {
     return storage_read_byte(engine.ptr++);
 }
 
-static uint16_t read_u16_be(void) {
-    uint8_t hi = read_byte();
+static uint16_t read_u16(void) {
     uint8_t lo = read_byte();
+    uint8_t hi = read_byte();
     return ((uint16_t)hi << 8) | lo;
 }
 
@@ -102,7 +102,7 @@ static void op_end(void) {
 }
 
 static void op_delay(void) {
-    engine.delay_duration = read_u16_be();
+    engine.delay_duration = read_u16();
     engine.delay_start = timer_millis();
     engine.state = ENGINE_DELAYING;
 }
