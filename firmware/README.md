@@ -6,27 +6,31 @@ USB keyboard firmware for ATtiny85/Digispark that executes macro scripts stored 
 
 ```
 firmware/
-├── src/                    
-│   ├── main.c              # Entry point and main loop
-│   ├── usb_keyboard.c/h    # USB HID keyboard interface + oscillator calibration
-│   ├── script_engine.c/h   # Bytecode interpreter for keyboard scripts
-│   ├── timer.c/h           # Hardware Timer1 for millisecond timing
+├── src/
+│   ├── main.c              # Entry point, program window, main loop
+│   ├── usb_core.c/h        # USB request dispatcher
+│   ├── usb_keyboard.c/h    # USB HID keyboard interface
+│   ├── usb_vendor.c/h      # USB vendor requests for programming
+│   ├── script_engine.c/h   # Bytecode interpreter
+│   ├── timer.c/h           # Millisecond timing
 │   ├── eeprom_storage.c/h  # Script storage with CRC16 validation
-│   ├── keycode.c/h         # ASCII to USB HID keycode conversion
+│   ├── crc16.c/h           # CRC16-CCITT utility
+│   ├── keycode.c/h         # ASCII to HID keycode conversion
 │   └── usbconfig.h         # V-USB configuration
 │
-└── lib/usbdrv/             # V-USB library for USB communication
+└── lib/usbdrv/             # V-USB library
 ```
 
 ### Core Modules
 
-- **USB Keyboard:** Implements USB HID keyboard functionality using V-USB library. Features automatic oscillator
-  calibration on USB reset for stable 16.5MHz operation.
-- **Script Engine**: Interprets bytecode stored in EEPROM. Supports key press/release, delays, modifiers, and string
-  output operations.
-- **Timer**: Provides millisecond-precision timing using ATtiny85 Timer1 with interrupt-driven counter.
-- **EEPROM Storage**: Manages script storage with header validation and CRC16 integrity checking.
-- **Keycode Conversion**: Translates ASCII characters to USB HID keycodes with modifier support.
+- **USB Core**: Dispatcher that routes USB requests to keyboard (HID) or vendor handlers.
+- **USB Keyboard**: HID keyboard using V-USB. Includes oscillator calibration on USB reset.
+- **USB Vendor**: Vendor requests for script programming via WebUSB.
+- **Script Engine**: Bytecode interpreter. Supports keys, delays, modifiers, and strings.
+- **Timer**: Millisecond-precision timing using Timer1 with interrupts.
+- **EEPROM Storage**: Script storage with header validation and CRC16 integrity.
+- **CRC16**: Shared CRC16-CCITT used by storage and vendor modules.
+- **Keycode**: ASCII to USB HID keycode translation.
 
 ## Building
 

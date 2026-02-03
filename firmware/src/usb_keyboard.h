@@ -39,4 +39,13 @@ void keyboard_release_all(void);
 bool keyboard_is_connected(void);
 uint8_t keyboard_get_led_state(void);
 
+/* -------------------------------------------------------------------------- */
+/* Internal Handlers (called by usb_core.c)                                   */
+/* -------------------------------------------------------------------------- */
+
+#include "usbdrv.h"
+
+usbMsgLen_t keyboard_handle_setup(usbRequest_t *rq);
+usbMsgLen_t keyboard_handle_write(uint8_t *data, uint8_t len);
+
 #endif

@@ -3,6 +3,7 @@
  */
 
 #include "eeprom_storage.h"
+#include "crc16.h"
 #include <avr/eeprom.h>
 
 /* Constants */
@@ -39,16 +40,8 @@ static void write_u16(uint16_t offset, uint16_t value) {
     eeprom_write_byte((uint8_t *)(offset + 1), (value >> 8) & 0xFF);
 }
 
-static uint16_t crc16_update(uint16_t crc, uint8_t byte) {
-    crc ^= (uint16_t)byte << 8;
-    for (uint8_t i = 0; i < 8; i++) {
-        crc = (crc & 0x8000) ? (crc << 1) ^ 0x1021 : crc << 1;
-    }
-    return crc;
-}
-
-static uint16_t calculate_crc16(uint16_t length) {
-    uint16_t crc = 0xFFFF;
+static uint16_t calculate_script_crc(uint16_t length) {
+    uint16_t crc = CRC16_INIT;
     for (uint16_t i = 0; i < length; i++) {
         crc = crc16_update(crc, eeprom_read_byte((const uint8_t *)(STORAGE_HEADER_SIZE + i)));
     }
@@ -110,7 +103,7 @@ storage_error_t storage_verify_script(void) {
         return STORAGE_ERR_SIZE_EXCEEDED;
     }
 
-    if (read_u16(OFFSET_CRC) != calculate_crc16(length)) {
+    if (read_u16(OFFSET_CRC) != calculate_script_crc(length)) {
         return STORAGE_ERR_CHECKSUM_MISMATCH;
     }
 
@@ -124,11 +117,10 @@ storage_error_t storage_write_script(const uint8_t *data, uint16_t length) {
         return STORAGE_ERR_SIZE_EXCEEDED;
     }
 
-    uint16_t crc = 0xFFFF;
     for (uint16_t i = 0; i < length; i++) {
         eeprom_write_byte((uint8_t *)(STORAGE_HEADER_SIZE + i), data[i]);
-        crc = crc16_update(crc, data[i]);
     }
+    uint16_t crc = crc16_calculate(data, length);
 
     write_u16(OFFSET_MAGIC, STORAGE_MAGIC);
     eeprom_write_byte((uint8_t *)OFFSET_VERSION, STORAGE_VERSION);

@@ -84,17 +84,11 @@ static void build_report(uint8_t modifiers, const uint8_t *keys, uint8_t key_cou
 }
 
 /* -------------------------------------------------------------------------- */
-/* V-USB Callbacks                                                            */
+/* Internal Handlers (called by usb_core.c)                                   */
 /* -------------------------------------------------------------------------- */
 
-usbMsgLen_t usbFunctionSetup(uint8_t data[8]) {
-    usbRequest_t *rq = (void *)data;
-
+usbMsgLen_t keyboard_handle_setup(usbRequest_t *rq) {
     has_communicated = true;
-
-    if ((rq->bmRequestType & USBRQ_TYPE_MASK) != USBRQ_TYPE_CLASS) {
-        return 0;
-    }
 
     switch (rq->bRequest) {
         case USBRQ_HID_GET_IDLE:
@@ -119,7 +113,7 @@ usbMsgLen_t usbFunctionSetup(uint8_t data[8]) {
 
         case USBRQ_HID_SET_REPORT:
             if (rq->wLength.word == 1) {
-                return USB_NO_MSG;  /* Call usbFunctionWrite */
+                return USB_NO_MSG;  /* Call keyboard_handle_write */
             }
             return 0;
 
@@ -128,45 +122,11 @@ usbMsgLen_t usbFunctionSetup(uint8_t data[8]) {
     }
 }
 
-usbMsgLen_t usbFunctionWrite(uint8_t *data, uchar len) {
+usbMsgLen_t keyboard_handle_write(uint8_t *data, uint8_t len) {
     if (len > 0) {
         led_state = data[0];
     }
     return 1;
-}
-
-/* Oscillator calibration - called from USB_RESET_HOOK in usbconfig.h */
-
-void calibrateOscillator(void) {
-    uchar step = 128;
-    uchar trialValue = 0, optimumValue;
-    int x, optimumDev;
-    int targetValue = (unsigned)(1499 * (double)F_CPU / 10.5e6 + 0.5);
-
-    /* Binary search */
-    do {
-        OSCCAL = trialValue + step;
-        x = usbMeasureFrameLength();
-        if (x < targetValue) {
-            trialValue += step;
-        }
-        step >>= 1;
-    } while (step > 0);
-
-    /* Neighborhood search for optimum */
-    optimumValue = trialValue;
-    optimumDev = x;
-
-    for (OSCCAL = trialValue - 1; OSCCAL <= trialValue + 1; OSCCAL++) {
-        x = usbMeasureFrameLength() - targetValue;
-        if (x < 0) x = -x;
-        if (x < optimumDev) {
-            optimumDev = x;
-            optimumValue = OSCCAL;
-        }
-    }
-
-    OSCCAL = optimumValue;
 }
 
 /* -------------------------------------------------------------------------- */
