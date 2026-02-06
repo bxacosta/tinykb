@@ -9,25 +9,33 @@
 #include <avr/interrupt.h>
 
 #include "usb_keyboard.h"
-#include "usb_vendor.h"
 #include "timer.h"
 #include "eeprom_storage.h"
 #include "script_engine.h"
 
-/* Constants */
+/* ========================================================================== */
+/* Constants                                                                  */
+/* ========================================================================== */
 
-#define PROGRAM_WINDOW_MS 2000  /* 2 second window for programming */
+#define LED_PIN PB1
 
-/* -------------------------------------------------------------------------- */
-/* Private Section                                                             */
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
+/* Private Functions                                                          */
+/* ========================================================================== */
 
-/**
- * Cooperative delay that maintains USB polling.
- * Does not block USB communication.
- *
- * @param duration_ms Delay duration in milliseconds
- */
+static void led_init(void) {
+    DDRB |= (1 << LED_PIN);
+    PORTB &= ~(1 << LED_PIN);
+}
+
+static void led_on(void) {
+    PORTB |= (1 << LED_PIN);
+}
+
+static void led_off(void) {
+    PORTB &= ~(1 << LED_PIN);
+}
+
 static void delay_with_poll(uint16_t duration_ms) {
     uint16_t start = timer_millis();
     while (!timer_elapsed(start, duration_ms)) {
@@ -35,71 +43,48 @@ static void delay_with_poll(uint16_t duration_ms) {
     }
 }
 
-/**
- * Wait for USB host connection.
- * Keeps polling USB until host communicates with us.
- */
 static void wait_for_connection(void) {
     while (!keyboard_is_connected()) {
         keyboard_poll();
     }
 }
 
-/* -------------------------------------------------------------------------- */
-/* Public Section                                                              */
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
+/* Main Entry Point                                                           */
+/* ========================================================================== */
 
 int main(void) {
-    /* Initialize all modules */
-    keyboard_init();  /* Also handles USB disconnect/connect cycle */
+    /* Initialize modules */
+    keyboard_init();
     timer_init();
     storage_init();
     engine_init();
-    vendor_init();
+    led_init();
 
-    /* Enable global interrupts (required for Timer1 and V-USB) */
+    /* Enable global interrupts */
     sei();
 
-    /* Wait for USB enumeration to complete */
+    /* Wait for USB enumeration */
     wait_for_connection();
 
-    /* Program window - allow host to enter program mode */
-    vendor_set_mode(MODE_WAITING);
-    uint16_t window_start = timer_millis();
-    while (!timer_elapsed(window_start, PROGRAM_WINDOW_MS)) {
-        keyboard_poll();
-        /* Exit window early if host enters program mode */
-        if (vendor_get_mode() == MODE_PROGRAM) {
-            break;
+    /* Execute script if valid */
+    if (storage_has_valid_script()) {
+        led_on();
+
+        uint16_t initial_delay = storage_get_initial_delay();
+        if (initial_delay > 0) {
+            delay_with_poll(initial_delay);
         }
+
+        engine_start();
+        led_off();
     }
 
-    /* Auto-execute script if not in program mode */
-    if (vendor_get_mode() == MODE_WAITING) {
-        vendor_set_mode(MODE_RUNNING);
-
-        if (storage_has_valid_script()) {
-            /* Apply initial delay from EEPROM flags (0-7.5s in 500ms units) */
-            uint16_t initial_delay = storage_get_initial_delay();
-            if (initial_delay > 0) {
-                delay_with_poll(initial_delay);
-            }
-
-            /* Start script execution */
-            engine_start();
-        }
-    }
-
-    /* Main loop - runs forever */
+    /* Main loop */
     for (;;) {
-        /* Maintain USB connection (must be called every <10ms) */
         keyboard_poll();
-
-        /* Advance script execution only in running mode */
-        if (vendor_get_mode() == MODE_RUNNING) {
-            engine_tick();
-        }
+        engine_tick();
     }
 
-    return 0;  /* Never reached */
+    return 0;
 }

@@ -6,49 +6,29 @@
 
 #include "usb_core.h"
 #include "usb_keyboard.h"
-#include "usb_vendor.h"
 #include <avr/io.h>
 
-/* -------------------------------------------------------------------------- */
-/* Private                                                                    */
-/* -------------------------------------------------------------------------- */
-
-/* Track current request type for multi-packet transfers */
-static uint8_t current_request_type;
-
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
 /* V-USB Callbacks                                                            */
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
 
-/* Called by V-USB when a SETUP packet arrives. Routes to vendor or HID handler. */
 usbMsgLen_t usbFunctionSetup(uint8_t data[8]) {
-    usbRequest_t *rq = (void *)data;
-    current_request_type = rq->bmRequestType & USBRQ_TYPE_MASK;
+    usbRequest_t *request = (void *)data;
 
-    if (current_request_type == USBRQ_TYPE_VENDOR) {
-        return vendor_handle_setup(rq);
-    }
-
-    if (current_request_type == USBRQ_TYPE_CLASS) {
-        return keyboard_handle_setup(rq);
+    if ((request->bmRequestType & USBRQ_TYPE_MASK) == USBRQ_TYPE_CLASS) {
+        return keyboard_handle_setup(request);
     }
 
     return 0;
 }
 
-/* Called by V-USB to receive data from host (control-out transfers). */
 usbMsgLen_t usbFunctionWrite(uint8_t *data, uchar len) {
-    if (current_request_type == USBRQ_TYPE_VENDOR) {
-        return vendor_handle_write(data, len);
-    }
     return keyboard_handle_write(data, len);
 }
 
-/* Called by V-USB to send data to host (control-in transfers). */
 uchar usbFunctionRead(uchar *data, uchar len) {
-    if (current_request_type == USBRQ_TYPE_VENDOR) {
-        return vendor_handle_read(data, len);
-    }
+    (void)data;
+    (void)len;
     return 0;
 }
 

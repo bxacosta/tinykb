@@ -26,7 +26,6 @@ echo "Compiling source files..."
 avr-gcc $CFLAGS $INCLUDES -c src/main.c -o ${BUILD_DIR}/main.o
 avr-gcc $CFLAGS $INCLUDES -c src/usb_keyboard.c -o ${BUILD_DIR}/usb_keyboard.o
 avr-gcc $CFLAGS $INCLUDES -c src/usb_core.c -o ${BUILD_DIR}/usb_core.o
-avr-gcc $CFLAGS $INCLUDES -c src/usb_vendor.c -o ${BUILD_DIR}/usb_vendor.o
 avr-gcc $CFLAGS $INCLUDES -c src/script_engine.c -o ${BUILD_DIR}/script_engine.o
 avr-gcc $CFLAGS $INCLUDES -c src/timer.c -o ${BUILD_DIR}/timer.o
 avr-gcc $CFLAGS $INCLUDES -c src/eeprom_storage.c -o ${BUILD_DIR}/eeprom_storage.o
