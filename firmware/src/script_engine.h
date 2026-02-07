@@ -10,8 +10,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-/* Opcodes */
+/* -------------------------------------------------------------------------- */
+/* Constants                                                                  */
+/* -------------------------------------------------------------------------- */
 
+/* Opcodes */
 #define OP_END      0x00
 #define OP_DELAY    0x01
 #define OP_KEY_DOWN 0x02
@@ -22,7 +25,9 @@
 #define OP_COMBO    0x07
 #define OP_STRING   0x08
 
-/* Types */
+/* -------------------------------------------------------------------------- */
+/* Types                                                                      */
+/* -------------------------------------------------------------------------- */
 
 typedef enum {
     ENGINE_IDLE,
@@ -51,4 +56,4 @@ engine_state_t engine_tick(void);
 engine_state_t engine_get_state(void);
 bool engine_is_running(void);
 
-#endif
+#endif /* SCRIPT_ENGINE_H */

@@ -1,7 +1,7 @@
 /**
- * crc16.h - CRC16-CCITT utility
+ * crc16.h - CRC16-CCITT calculation
  *
- * Shared CRC16 implementation used by EEPROM storage and USB vendor interface.
+ * Used by EEPROM storage for script integrity verification.
  * Polynomial: 0x1021 (CCITT), Initial value: 0xFFFF
  */
 
@@ -9,31 +9,19 @@
 #define CRC16_H
 
 #include <stdint.h>
-
-/* Constants */
-
-#define CRC16_INIT 0xFFFF
+#include <stdbool.h>
 
 /* -------------------------------------------------------------------------- */
 /* Public API                                                                 */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Update CRC16 with a single byte.
- *
- * @param crc Current CRC value
- * @param byte Byte to process
- * @return Updated CRC value
- */
+/* Lifecycle */
+
+uint16_t crc16_init(void);
+
+/* Calculation */
+
 uint16_t crc16_update(uint16_t crc, uint8_t byte);
+uint16_t crc16_finalize(uint16_t crc);
 
-/**
- * Calculate CRC16 over a data buffer.
- *
- * @param data Pointer to data buffer
- * @param length Number of bytes to process
- * @return Calculated CRC16 value
- */
-uint16_t crc16_calculate(const uint8_t *data, uint16_t length);
-
-#endif
+#endif /* CRC16_H */

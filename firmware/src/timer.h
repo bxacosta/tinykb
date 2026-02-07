@@ -2,7 +2,7 @@
  * timer.h - Hardware timer for timing operations
  *
  * Uses Timer1 on ATtiny85 to provide millisecond-resolution timing.
- * Does not block USB - caller is responsible for calling keyboard_poll().
+ * Non-blocking: caller is responsible for calling usbPoll() or keyboard_poll().
  */
 
 #ifndef TIMER_H
@@ -15,13 +15,13 @@
 /* Public API                                                                 */
 /* -------------------------------------------------------------------------- */
 
-/* Initialization */
+/* Lifecycle */
 
 void timer_init(void);
 
-/* Time queries */
+/* Time Queries */
 
 uint16_t timer_millis(void);
 bool timer_elapsed(uint16_t start, uint16_t duration);
 
-#endif
+#endif /* TIMER_H */

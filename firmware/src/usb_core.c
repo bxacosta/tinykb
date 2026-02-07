@@ -1,66 +1,66 @@
 /**
- * usb_core.c - USB core dispatcher
+ * usb_core.c - V-USB core dispatcher
  *
- * Implements V-USB callbacks and delegates to appropriate handlers.
+ * Implements V-USB callbacks and routes requests to appropriate handlers
+ * based on current device mode:
+ *   Programming mode -> usb_rawhid
+ *   Keyboard mode -> usb_keyboard
  */
 
 #include "usb_core.h"
+#include "usb_descriptors.h"
 #include "usb_keyboard.h"
-#include <avr/io.h>
+#include "usb_rawhid.h"
+#include "device_mode.h"
 
-/* ========================================================================== */
+/* -------------------------------------------------------------------------- */
 /* V-USB Callbacks                                                            */
-/* ========================================================================== */
+/* -------------------------------------------------------------------------- */
 
 usbMsgLen_t usbFunctionSetup(uint8_t data[8]) {
     usbRequest_t *request = (void *)data;
 
     if ((request->bmRequestType & USBRQ_TYPE_MASK) == USBRQ_TYPE_CLASS) {
-        return keyboard_handle_setup(request);
+        if (device_mode_is_keyboard()) {
+            return keyboard_handle_setup(request);
+        } else {
+            return rawhid_handle_setup(request);
+        }
     }
 
     return 0;
 }
 
 usbMsgLen_t usbFunctionWrite(uint8_t *data, uchar len) {
-    return keyboard_handle_write(data, len);
+    if (device_mode_is_keyboard()) {
+        return keyboard_handle_write(data, len);
+    } else {
+        return rawhid_handle_write(data, len);
+    }
 }
 
 uchar usbFunctionRead(uchar *data, uchar len) {
-    (void)data;
-    (void)len;
-    return 0;
+    if (device_mode_is_keyboard()) {
+        return 0;
+    } else {
+        return rawhid_handle_read(data, len);
+    }
 }
 
-/* Called by USB_RESET_HOOK to calibrate internal RC oscillator for stable USB. */
-void calibrateOscillator(void) {
-    uchar step = 128;
-    uchar trialValue = 0, optimumValue;
-    int x, optimumDev;
-    int targetValue = (unsigned)(1499 * (double)F_CPU / 10.5e6 + 0.5);
+usbMsgLen_t usbFunctionDescriptor(struct usbRequest *request) {
+    uint8_t descriptor_type = request->wValue.bytes[1];
 
-    /* Binary search */
-    do {
-        OSCCAL = trialValue + step;
-        x = usbMeasureFrameLength();
-        if (x < targetValue) {
-            trialValue += step;
-        }
-        step >>= 1;
-    } while (step > 0);
+    switch (descriptor_type) {
+        case DESCRIPTOR_TYPE_CONFIGURATION:
+            return descriptors_get_configuration();
 
-    /* Neighborhood search for optimum */
-    optimumValue = trialValue;
-    optimumDev = x;
+        case DESCRIPTOR_TYPE_HID:
+            return descriptors_get_hid();
 
-    for (OSCCAL = trialValue - 1; OSCCAL <= trialValue + 1; OSCCAL++) {
-        x = usbMeasureFrameLength() - targetValue;
-        if (x < 0) x = -x;
-        if (x < optimumDev) {
-            optimumDev = x;
-            optimumValue = OSCCAL;
-        }
+        case DESCRIPTOR_TYPE_HID_REPORT:
+            return descriptors_get_hid_report();
+
+        default:
+            return 0;
     }
-
-    OSCCAL = optimumValue;
 }

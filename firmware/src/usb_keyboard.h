@@ -1,7 +1,7 @@
 /**
  * usb_keyboard.h - USB HID keyboard interface
  *
- * Encapsulates all V-USB communication. Provides a clean interface for
+ * Encapsulates V-USB keyboard communication. Provides a clean interface for
  * sending keyboard reports to the host.
  */
 
@@ -11,32 +11,34 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-/* Constants */
+/* -------------------------------------------------------------------------- */
+/* Constants                                                                  */
+/* -------------------------------------------------------------------------- */
 
-#define HID_REPORT_SIZE       8
-#define MAX_SIMULTANEOUS_KEYS 6
+#define KEYBOARD_REPORT_SIZE 8
+#define KEYBOARD_MAX_KEYS    6
 
 /* -------------------------------------------------------------------------- */
 /* Public API                                                                 */
 /* -------------------------------------------------------------------------- */
 
-/* Initialization */
+/* Lifecycle */
 
 void keyboard_init(void);
 
-/* USB maintenance */
+/* USB Maintenance */
 
 void keyboard_poll(void);
 bool keyboard_is_ready(void);
+bool keyboard_is_connected(void);
 
-/* Report sending */
+/* Report Sending */
 
 bool keyboard_send_report(uint8_t modifiers, const uint8_t *keys, uint8_t key_count);
 void keyboard_release_all(void);
 
-/* Status */
+/* LED State */
 
-bool keyboard_is_connected(void);
 uint8_t keyboard_get_led_state(void);
 
 /* -------------------------------------------------------------------------- */
@@ -45,7 +47,7 @@ uint8_t keyboard_get_led_state(void);
 
 #include "usbdrv.h"
 
-usbMsgLen_t keyboard_handle_setup(usbRequest_t *rq);
-usbMsgLen_t keyboard_handle_write(uint8_t *data, uint8_t len);
+usbMsgLen_t keyboard_handle_setup(usbRequest_t *request);
+usbMsgLen_t keyboard_handle_write(uint8_t *data, uint8_t length);
 
-#endif
+#endif /* USB_KEYBOARD_H */

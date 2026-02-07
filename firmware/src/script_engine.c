@@ -15,20 +15,17 @@
 /* State */
 
 static struct {
-    uint16_t ptr;           /* Current position in script */
-    uint16_t length;        /* Script length */
+    uint16_t ptr;
+    uint16_t length;
     engine_state_t state;
 
-    /* HID report state */
     uint8_t modifiers;
-    uint8_t keys[MAX_SIMULTANEOUS_KEYS];
+    uint8_t keys[KEYBOARD_MAX_KEYS];
     uint8_t key_count;
 
-    /* DELAY state */
     uint16_t delay_start;
     uint16_t delay_duration;
 
-    /* REPEAT state */
     uint16_t repeat_start;
     uint8_t repeat_count;
     uint8_t repeat_length;
@@ -38,15 +35,13 @@ static struct {
 /* Key management */
 
 static bool add_key(uint8_t keycode) {
-    /* Check if already pressed */
     for (uint8_t i = 0; i < engine.key_count; i++) {
         if (engine.keys[i] == keycode) {
             return true;
         }
     }
 
-    /* Check 6KRO limit */
-    if (engine.key_count >= MAX_SIMULTANEOUS_KEYS) {
+    if (engine.key_count >= KEYBOARD_MAX_KEYS) {
         return false;
     }
 
@@ -68,7 +63,7 @@ static void clear_all_keys(void) {
     engine.key_count = 0;
 }
 
-/* Report sending with USB polling */
+/* Report sending */
 
 static void send_report(void) {
     while (!keyboard_is_ready()) {
@@ -138,7 +133,6 @@ static void op_tap_opcode(void) {
 
 static void op_repeat(void) {
     if (engine.in_repeat) {
-        /* Nested REPEAT not allowed - skip it */
         uint8_t count = read_byte();
         uint8_t length = read_byte();
         (void)count;
@@ -176,11 +170,10 @@ static void op_string(void) {
         keycode_result_t result = keycode_from_ascii(c);
 
         if (result.keycode == 0) {
-            continue;  /* Skip unsupported characters */
+            continue;
         }
 
         if (result.modifiers != 0) {
-            /* Character requires modifier (e.g., Shift for uppercase) */
             uint8_t saved_mods = engine.modifiers;
             engine.modifiers = result.modifiers;
             op_tap(result.keycode);
@@ -190,7 +183,6 @@ static void op_string(void) {
             op_tap(result.keycode);
         }
 
-        /* Poll USB between characters to maintain connection */
         keyboard_poll();
     }
 }
