@@ -5,6 +5,15 @@ keystrokes.
 
 ---
 
+## Design Goals
+
+1. **Full keyboard capability**: Enable any behavior a physical keyboard can perform, leaving no use case impossible to
+   express in bytecode.
+2. **Minimal bytecode size**: Reduce script size for common operations through purpose-built shortcuts, optimizing
+   storage and transmission efficiency.
+3. **Guaranteed clean state**: Prevent stuck keys or orphaned modifier states under all circumstances, including script
+   errors or unexpected termination.
+
 ## Storage Format
 
 The script payload consists of an 8-byte header followed by variable-length bytecode. All multi-byte integers use *
@@ -240,7 +249,15 @@ Types ASCII text using US keyboard layout. Automatically handles shift state for
 
 **Constraints:**
 
-- Supported characters: 0x08 (Backspace), 0x09 (Tab), 0x0A (Newline), 0x20-0x7E (printable ASCII)
+- Supported ASCII Printable Characters:
+    - 0x20: Space
+    - 0x21-0x2F: Symbols (`!`, `"`, `#`, `$`, `%`, `&`, `'`, `(`, `)`, `*`, `+`, `,`, `-`, `.`, `/`)
+    - 0x30-0x39: Digits (0-9)
+    - 0x3A-0x40: Symbols (`:`, `;`, `<`, `=`, `>`, `?`, `@`)
+    - 0x41-0x5A: Uppercase letters (A-Z)
+    - 0x5B-0x60: Symbols (`[`, `\`, `]`, `^`, `_`, `` ` ``)
+    - 0x61-0x7A: Lowercase letters (a-z)
+    - 0x7B-0x7E: Symbols (`{`, `|`, `}`, `~`)
 - Unsupported characters are silently skipped
 - Automatic shift handling for uppercase and symbols
 
@@ -367,7 +384,42 @@ Payload: 07 08 15 01 F4 01 08 04 63 61 6C 63 05 28 01 E8 03 06 04 02 05 1F 08 01
 - USB report interval: 8ms (125 Hz)
 - Minimum reliable inter-key delay: 10-20ms for compatibility
 
+## Future Improvements
+
+### New Opcodes
+
+- **WAIT_LED**: Pause execution until a keyboard LED changes state (Caps Lock, Num Lock, Scroll Lock), enabling
+  synchronization with OS responses.
+- **IF_LED**: Conditional execution based on LED state, allowing scripts to branch depending on current Caps Lock or Num
+  Lock status.
+- **RANDOM_DELAY**: Pause for a random duration between min and max values, useful for human-like typing simulation and
+  anti-detection scenarios.
+
+### Opcode Enhancements
+
+- **STRING with inter-character delay**: Add optional delay parameter to `STRING` opcode to simulate human typing
+  speed (delay in 10ms increments).
+- **DELAY resolution change**: Modify `DELAY` to use 10ms units instead of 1ms, extending maximum delay from ~65 seconds
+  to ~10.9 minutes while maintaining 2-byte parameter.
+
+### Script Flags
+
+- **Loop mode flag**: Script restarts automatically after `END`, useful for continuous input patterns (e.g., keep-alive
+  keystrokes, repeating macros).
+- **LED initialization flags**: Set initial state of Caps Lock, Num Lock, and Scroll Lock at script start (ON, OFF,
+  TOGGLE, or IGNORE), ensuring consistent keyboard state regardless of initial conditions.
+
 ## References
 
 - [USB HID Keyboard scan codes](https://gist.github.com/MightyPork/6da26e382a7ad91b5496ee55fdc73db2)
 - [CRC-16-CCITT Calculator](https://crccalc.com/?crc=&method=CRC-16/CCITT-FALSE&datatype=hex&outtype=hex)
+
+---
+
+## Changelog
+
+### v1.0.0 (2025-02-07)
+
+- Initial specification release
+- Defined 8 opcodes: END, DELAY, KEY_DOWN, KEY_UP, MOD, TAP, COMBO, STRING
+- Established three-layer architecture (primitives, common, shortcuts)
