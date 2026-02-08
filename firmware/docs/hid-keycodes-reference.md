@@ -1,7 +1,6 @@
 # USB HID Keyboard Keycodes Reference
 
-A complete reference of USB HID keycodes as defined in the USB HID Usage Tables specification (Usage Page 0x07 -
-Keyboard/Keypad).
+A complete reference of USB HID keycodes as defined in the USB HID Usage Tables specification.
 
 ---
 
@@ -239,3 +238,9 @@ Modifiers are **not** keycodes. They are represented as a bitmap in byte 0 of th
 | 0x7F    | Mute        |                  |
 | 0x80    | Volume Up   |                  |
 | 0x81    | Volume Down |                  |
+
+---
+
+## References
+
+- [USB HID Usage Tables](https://usb.org/document-library/hid-usage-tables-17): Section *10 Keyboard/Keypad Page (0x07)*
