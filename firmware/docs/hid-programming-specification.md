@@ -18,8 +18,8 @@ compatible with any HID library.
 
 ## Report Format
 
-All communication uses 32-byte HID reports with no Report ID. Multi-byte integers use **Little-Endian** byte order (LSB
-first).
+All communication uses 32-byte HID reports with no Report ID. All multi-byte values use **Little-Endian** byte order
+(LSB first).
 
 ### Output Report (Host → Device)
 

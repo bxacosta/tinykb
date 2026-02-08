@@ -16,7 +16,7 @@ keystrokes.
 
 ## Storage Format
 
-The script payload consists of an 8-byte header followed by variable-length bytecode. All multi-byte integers use
+The script payload consists of an 8-byte header followed by variable-length bytecode. All multi-byte values use
 **Little-Endian** byte order (LSB first).
 
 ### Header Layout (Offsets 0x00-0x07)
@@ -83,6 +83,13 @@ Terminates script execution. Automatically releases all held keys and clears mod
 
 - Must be the final instruction in every valid script
 
+**Behavior:**
+
+- Scripts without END will execute until LENGTH is reached, then terminate with error
+- Only one END per script, execution stops at first END encountered
+
+**HID Reports:** Generates 1 report to release all keys and modifiers.
+
 **Examples:**
 
 - Terminate script: `END()` → `0x00`
@@ -126,6 +133,14 @@ Presses and holds a key. The key remains in the active HID report until released
 - Exceeding limit causes additional keys to be silently dropped
 - Does not affect modifier keys (see MOD)
 
+**Behavior:**
+
+- Pressing an already-held key has no effect (idempotent)
+    - The key remains in the active keys list
+    - No additional HID report is generated
+
+**HID Reports:** Generates 1 report with the key added to the active keys list.
+
 **Examples:**
 
 - Hold 'A' key: `KEY_DOWN(keycode: KEY_A)` → `0x02 0x04`
@@ -142,6 +157,14 @@ Releases a previously pressed key from the active HID report.
 **Parameters:**
 
 - keycode: USB HID Usage ID of the key to release
+
+**Behavior:**
+
+- Releasing an already-released key has no effect (idempotent)
+    - No error is generated
+    - No HID report is generated
+
+**HID Reports:** Generates 1 report with the key removed from the active keys list.
 
 **Examples:**
 
@@ -173,6 +196,14 @@ Sets modifier key state using absolute bitmask. Replaces current modifier state 
 | 6   | Right Alt   |
 | 7   | Right GUI   |
 
+**Behavior:**
+
+- Sets the modifier byte to the specified value without affecting pressed keys
+- Pressed keys persist across modifier changes, combining in the next HID report
+- Always generates a HID report, even if the modifier value is unchanged (ensures host synchronization)
+
+**HID Reports:** Generates 1 report with updated modifier state and current active keys.
+
 **Examples:**
 
 - Clear all modifiers: `MOD(mask: 0x00)` → `0x04 0x00`
@@ -189,6 +220,11 @@ Presses and immediately releases a key. Equivalent to KEY_DOWN followed by KEY_U
 **Parameters:**
 
 - keycode: USB HID Usage ID of the key to tap
+
+**HID Reports:** Generates 2 reports:
+
+- Key press report (key added with current modifiers)
+- Key release report (key removed, modifiers unchanged)
 
 **Examples:**
 
@@ -214,6 +250,12 @@ Executes the next `size` bytes `iterations` times. Reduces script size for repet
 - Block must not contain partial instructions
 - Maximum block size: 255 bytes
 
+**Behavior:**
+
+- If nested, inner REPEAT blocks are ignored and execution continues after them
+- If iterations is 0, the block is skipped
+- If size is 0, the REPEAT has no effect
+
 **Examples:**
 
 - Type '2' four times: `REPEAT(iterations: 4, size: 2)` followed by `TAP(keycode: KEY_2)` → `0x06 0x04 0x02 0x05 0x1F`
@@ -221,7 +263,7 @@ Executes the next `size` bytes `iterations` times. Reduces script size for repet
 
 ### COMBO (0x07)
 
-Taps a key with temporary modifiers applied. Previous modifier state is preserved and restored after execution.
+Executes a key press with specified modifiers, then release the key and restores the original modifier state.
 
 **Format:** `COMBO(modifiers: uint8, keycode: uint8)`
 
@@ -231,6 +273,11 @@ Taps a key with temporary modifiers applied. Previous modifier state is preserve
 
 - modifiers: Temporary modifier mask (same format as MOD)
 - keycode: USB HID Usage ID of the key to tap with modifiers
+
+**HID Reports:** Generates 2 reports:
+
+- Key press with modifiers from parameter (existing keys preserved)
+- Key release and modifiers restored to original value
 
 **Examples:**
 
@@ -263,10 +310,51 @@ Types ASCII text using US keyboard layout. Automatically handles shift state for
 - Unsupported characters are silently skipped
 - Automatic shift handling for uppercase and symbols
 
+**Behavior:**
+
+- Unsupported characters are silently skipped:
+    - No key press is generated
+    - No error is raised
+    - Execution continues with the next character
+
+**HID Reports:** Generates 2 reports per character:
+
+- Key press with shift modifier if needed (uppercase/symbols)
+- Key release with modifiers restored
+
 **Examples:**
 
 - Type "Hello": `STRING(text: "Hello")` → `0x08 0x05 0x48 0x65 0x6C 0x6C 0x6F`
 - Type "Test!": `STRING(text: "Test!")` → `0x08 0x05 0x54 0x65 0x73 0x74 0x21`
+
+---
+
+## Initial State
+
+When script execution begins:
+
+- All modifier keys are released (modifier mask = 0x00)
+- All regular keys are released (no keys pressed)
+- Keyboard state is guaranteed to be clean regardless of previous script execution
+
+---
+
+## Error Handling
+
+### Invalid Opcodes
+
+If an unrecognized opcode is encountered:
+
+- Execution immediately terminates
+- All keys and modifiers are released
+- Keyboard is returned to clean state
+
+### Malformed Bytecode
+
+If bytecode reading extends beyond LENGTH:
+
+- Execution immediately terminates as if END was reached
+- All keys and modifiers are released
 
 ---
 
