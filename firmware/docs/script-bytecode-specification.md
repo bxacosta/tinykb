@@ -16,33 +16,35 @@ keystrokes.
 
 ## Storage Format
 
-The script payload consists of an 8-byte header followed by variable-length bytecode. All multi-byte integers use *
-*Little-Endian** byte order (LSB first).
+The script payload consists of an 8-byte header followed by variable-length bytecode. All multi-byte integers use
+**Little-Endian** byte order (LSB first).
 
 ### Header Layout (Offsets 0x00-0x07)
 
-| Offset | Field   | Size | Type     | Description                                     |
-|--------|---------|------|----------|-------------------------------------------------|
-| 0x00   | VERSION | 1    | uint8_t  | Script version identifier. Must be 0xA1.        |
-| 0x01   | FLAGS   | 1    | uint8_t  | Reserved. Set to 0x00.                          |
-| 0x02   | DELAY   | 2    | uint16_t | Pre-execution delay in 100ms units (LE).        |
-| 0x04   | LENGTH  | 2    | uint16_t | Bytecode size in bytes, excluding header (LE).  |
-| 0x06   | CRC16   | 2    | uint16_t | CRC-16-CCITT checksum of bytecode payload (LE). |
+| Offset | Field   | Size | Type     | Default | Description                                    |
+|--------|---------|------|----------|---------|------------------------------------------------|
+| 0x00   | VERSION | 1    | uint8_t  | 0x1A    | Payload format version identifier              |
+| 0x01   | FLAGS   | 1    | uint8_t  | 0x00    | Reserved. Set to 0x00                          |
+| 0x02   | DELAY   | 2    | uint16_t | 0x0000  | Pre-execution delay in 100ms units (LE)        |
+| 0x04   | LENGTH  | 2    | uint16_t | 0x0000  | Bytecode size in bytes, excluding header (LE)  |
+| 0x06   | CRC16   | 2    | uint16_t | 0xFFFF  | CRC-16-CCITT checksum of bytecode payload (LE) |
+
+The `VERSION` field defines the payload format version. Must be set to `0x1A` for the current specification. Future
+breaking changes will update this identifier to prevent execution on unsupported interpreters.
 
 **Pre-execution Delay:**
 
 - Calculated as: `DELAY × 100ms`
-- Range: 0 to 6553.5 seconds
+- Range: 0 to ~6553 seconds (~109 minutes)
 - Example: 0x000A = 10 × 100ms = 1 second
 
 **Validation Requirements:**
 
-- VERSION must equal 0xA1
+- VERSION must match the expected payload format version
 - LENGTH must be greater than 0
-- CRC16 must match computed checksum of bytecode (polynomial 0x1021, initial 0xFFFF)
+- CRC16 must match computed checksum of bytecode
 
-**Bytecode Location:**
-Bytecode starts immediately after header at offset 0x08.
+**Bytecode Location:** Bytecode starts immediately after header at offset 0x08.
 
 ---
 
@@ -270,9 +272,11 @@ Types ASCII text using US keyboard layout. Automatically handles shift state for
 
 ## Complete Examples
 
-**Example 1:** Type "Hello" and press `Enter`
+### Example 1
 
-**Bytecode Breakdown:**
+**Description:** Type "Hello" and press `Enter`
+
+**Script Bytecode:**
 
 | Instruction | Hex Bytes            | Format                  | Details        |
 |-------------|----------------------|-------------------------|----------------|
@@ -280,11 +284,11 @@ Types ASCII text using US keyboard layout. Automatically handles shift state for
 | TAP         | 05 28                | TAP(keycode: KEY_ENTER) | KEY_ENTER=0x28 |
 | END         | 00                   | END()                   | -              |
 
-**Header:**
+**Header Bytecode:**
 
 | Offset | Field   | Value  | Description                       |
 |--------|---------|--------|-----------------------------------|
-| 0x00   | VERSION | 0xA1   | Script version v1                 |
+| 0x00   | VERSION | 0x1A   | Script version v1                 |
 | 0x01   | FLAGS   | 0x00   | Reserved                          |
 | 0x02   | DELAY   | 0x0014 | Pre-execution delay 2s (20*100ms) |
 | 0x04   | LENGTH  | 0x000A | Bytecode length (10 bytes)        |
@@ -293,13 +297,15 @@ Types ASCII text using US keyboard layout. Automatically handles shift state for
 **Complete Payload:**
 
 ```
-Header: A1 00 14 00 0A 00 86 D1
+Header: 1A 00 14 00 0A 00 86 D1
 Payload: 08 05 48 65 6C 6C 6F 05 28 00
 ```
 
-**Example 2:** Select all, copy, open Notepad and paste the content
+### Example 2
 
-**Bytecode Breakdown:**
+**Description:** Select all, copy, open Notepad and paste the content
+
+**Script Bytecode:**
 
 | Instruction | Hex Bytes                  | Format                                      | Details                    |
 |-------------|----------------------------|---------------------------------------------|----------------------------|
@@ -313,11 +319,11 @@ Payload: 08 05 48 65 6C 6C 6F 05 28 00
 | COMBO       | 07 01 19                   | COMBO(modifiers: MOD_LCTRL, keycode: KEY_V) | MOD_LCTRL=0x01, KEY_V=0x19 |
 | END         | 00                         | END()                                       | -                          |
 
-**Header:**
+**Header Bytecode:**
 
 | Offset | Field   | Value  | Description                |
 |--------|---------|--------|----------------------------|
-| 0x00   | VERSION | 0xA1   | Script version v1          |
+| 0x00   | VERSION | 0x1A   | Script version v1          |
 | 0x01   | FLAGS   | 0x00   | Reserved                   |
 | 0x02   | DELAY   | 0x0000 | Pre-execution delay (0ms)  |
 | 0x04   | LENGTH  | 0x001E | Bytecode length (30 bytes) |
@@ -326,15 +332,15 @@ Payload: 08 05 48 65 6C 6C 6F 05 28 00
 **Complete Payload:**
 
 ```
-Header: A1 00 00 00 1E 00 46 B7
+Header: 1A 00 00 00 1E 00 46 B7
 Payload: 07 01 04 07 01 06 07 08 15 01 F4 01 08 07 6E 6F 74 65 70 61 64 05 28 01 F4 01 07 01 19 00
 ```
 
----
+### Example 3
 
-**Example 3:** Open calculator, compute 2222 + 777
+**Description:** Open calculator, compute 2222 + 777
 
-**Bytecode Breakdown:**
+**Script Bytecode:**
 
 | Instruction | Hex Bytes         | Format                                     | Details                         |
 |-------------|-------------------|--------------------------------------------|---------------------------------|
@@ -351,11 +357,11 @@ Payload: 07 01 04 07 01 06 07 08 15 01 F4 01 08 07 6E 6F 74 65 70 61 64 05 28 01
 | TAP         | 05 28             | TAP(keycode: KEY_ENTER)                    | KEY_ENTER=0x28                  |
 | END         | 00                | END()                                      | -                               |
 
-**Header:**
+**Header Bytecode:**
 
 | Offset | Field   | Value  | Description                |
 |--------|---------|--------|----------------------------|
-| 0x00   | VERSION | 0xA1   | Script version v1          |
+| 0x00   | VERSION | 0x1A   | Script version v1          |
 | 0x01   | FLAGS   | 0x00   | Reserved                   |
 | 0x02   | DELAY   | 0x0000 | Pre-execution delay (0ms)  |
 | 0x04   | LENGTH  | 0x0021 | Bytecode length (33 bytes) |
@@ -364,7 +370,7 @@ Payload: 07 01 04 07 01 06 07 08 15 01 F4 01 08 07 6E 6F 74 65 70 61 64 05 28 01
 **Complete Payload:**
 
 ```
-Header: A1 00 00 00 21 00 B4 6F
+Header: 1A 00 00 00 21 00 B4 6F
 Payload: 07 08 15 01 F4 01 08 04 63 61 6C 63 05 28 01 E8 03 06 04 02 05 1F 08 01 2B 06 03 02 05 24 05 28 00
 ```
 
@@ -418,8 +424,9 @@ Payload: 07 08 15 01 F4 01 08 04 63 61 6C 63 05 28 01 E8 03 06 04 02 05 1F 08 01
 
 ## Changelog
 
-### v1.0.0 (2025-02-07)
+### v1.0 (2025-02-07)
 
 - Initial specification release
+- Payload format version identifier `0x1A`
 - Defined 8 opcodes: END, DELAY, KEY_DOWN, KEY_UP, MOD, TAP, COMBO, STRING
 - Established three-layer architecture (primitives, common, shortcuts)
