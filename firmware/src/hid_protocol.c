@@ -52,14 +52,14 @@ static void handle_write_command(const uint8_t *report) {
     uint16_t length = read_le16(&report[3]);
 
     /* Validate address (script-relative offset) */
-    if (address >= STORAGE_MAX_SCRIPT) {
+    if (address >= STORAGE_MAX_SCRIPT_SIZE) {
         set_error_response(PROTOCOL_STATUS_INVALID_ADDRESS);
         return;
     }
 
     /* Validate length */
     if (length == 0 || length > PROTOCOL_MAX_WRITE_DATA ||
-        (address + length) > STORAGE_MAX_SCRIPT) {
+        (address + length) > STORAGE_MAX_SCRIPT_SIZE) {
         set_error_response(PROTOCOL_STATUS_INVALID_LENGTH);
         return;
     }
@@ -67,7 +67,10 @@ static void handle_write_command(const uint8_t *report) {
     /* Write bytes to EEPROM */
     storage_write_bytes(address, &report[5], (uint8_t)length);
 
-    set_ok_response();
+    /* Response: status + bytes_written */
+    response.status = PROTOCOL_STATUS_OK;
+    response.result1 = length;  /* bytes_written */
+    response_length = 3;  /* status(1) + bytes_written(2) */
 }
 
 static void handle_read_command(const uint8_t *report) {
@@ -75,14 +78,14 @@ static void handle_read_command(const uint8_t *report) {
     uint16_t length = read_le16(&report[3]);
 
     /* Validate address (script-relative offset) */
-    if (address >= STORAGE_MAX_SCRIPT) {
+    if (address >= STORAGE_MAX_SCRIPT_SIZE) {
         set_error_response(PROTOCOL_STATUS_INVALID_ADDRESS);
         return;
     }
 
     /* Validate length */
     if (length == 0 || length > PROTOCOL_MAX_READ_DATA ||
-        (address + length) > STORAGE_MAX_SCRIPT) {
+        (address + length) > STORAGE_MAX_SCRIPT_SIZE) {
         set_error_response(PROTOCOL_STATUS_INVALID_LENGTH);
         return;
     }
@@ -100,7 +103,7 @@ static void handle_append_command(const uint8_t *report) {
 
     /* Validate length */
     if (length == 0 || length > PROTOCOL_MAX_APPEND_DATA ||
-        (current_offset + length) > STORAGE_MAX_SCRIPT) {
+        (current_offset + length) > STORAGE_MAX_SCRIPT_SIZE) {
         set_error_response(PROTOCOL_STATUS_INVALID_LENGTH);
         return;
     }
@@ -137,7 +140,7 @@ static void handle_commit_command(const uint8_t *report) {
     uint16_t expected_crc = read_le16(&report[8]);
 
     /* Validate length */
-    if (length == 0 || length > STORAGE_MAX_SCRIPT) {
+    if (length == 0 || length > STORAGE_MAX_SCRIPT_SIZE) {
         set_error_response(PROTOCOL_STATUS_INVALID_LENGTH);
         return;
     }

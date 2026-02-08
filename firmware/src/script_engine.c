@@ -151,8 +151,12 @@ static void op_combo(void) {
     uint8_t keycode = read_byte();
 
     uint8_t saved_mods = engine.modifiers;
+
     engine.modifiers = mod_mask;
-    op_tap(keycode);
+    add_key(keycode);
+    send_report();
+
+    remove_key(keycode);
     engine.modifiers = saved_mods;
     send_report();
 }
