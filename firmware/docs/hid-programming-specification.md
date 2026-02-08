@@ -417,11 +417,22 @@ according to device constraints.
 
 ---
 
+## Future Improvements
+
+### New Commands
+
+- **CLEAR**: Write header with default values.
+-
+
+---
+
 ## References
 
 - [USB HID Specification](https://usb.org/sites/default/files/hid1_11.pdf)
 - [WebHID API](https://developer.mozilla.org/en-US/docs/Web/API/WebHID_API)
 - [V-USB Library](https://www.obdev.at/products/vusb/index.html)
+
+---
 
 ## Changelog
 
