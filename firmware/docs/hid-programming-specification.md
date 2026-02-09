@@ -392,28 +392,43 @@ Exits programming mode.
 
 ## Implementation Notes
 
-Specific implementation values (storage capacity, payload limits, etc.) are hardware-dependent and should be defined
-according to device constraints.
+### 1. Transport Mechanism
 
-**Addressing:**
+Because Low-Speed USB interrupt transfers are limited to 8 bytes, the device sends 32-byte payloads using the control
+transfer mechanism on Endpoint 0.
 
-- Header is written only by COMMIT
-- Mode flag is written only by EXIT
+- **Commands (Host → Device):** Transmitted via **Output Reports** (`SET_REPORT`).
+- **Responses (Device → Host):** Retrieved via **Feature Reports** (`GET_REPORT`).
 
-**CRC-16-CCITT Algorithm:**
+### 2. Synchronous Command Flow
 
-- Polynomial: 0x1021
-- Initial value: 0xFFFF
-- Process: MSB first
-- No final XOR
+The protocol is designed to be synchronous. The host should follow this pattern for every command:
 
-**USB Configuration:**
+1. **Send Command:** The host sends a 32-byte Output Report.
+2. **Request Response:** The host immediately requests a 32-byte Feature Report.
+3. **Verify Response:** The host checks that Byte 0 is `0x00` (OK).
 
-- Interface: HID (class 0x03)
-- Subclass: 0x00 (no boot protocol)
-- Protocol: 0x00
-- Usage Page: 0xFF00 (Vendor Defined)
-- Usage: 0x01
+### 3. Data Integrity
+
+Reliable data transfer (specifically for `APPEND`) requires host-side validation of the Running CRC16.
+
+1. **Calculate:** The host computes its own running CRC16 over the data transmitted so far.
+2. **Verify:** After each data chunk, the host compares its locally computed CRC with the device-reported `RUNNING_CRC`
+   and should stop the process if a mismatch is detected.
+
+### 4. USB Configuration
+
+- **VID / PID:** `0x16C0` / `0x27DB`
+- **Interface:** Class `0x03` (HID), Subclass `0x00`, Protocol `0x00`
+- **Usage:** Page `0xFF00`, Usage `0x01`
+- **Report Size:** 32 Bytes (Output & Feature)
+
+### 5. CRC-16-CCITT Algorithm
+
+- **Polynomial:** `0x1021`
+- **Initial Value:** `0xFFFF`
+- **Bit Order:** MSB first
+- **Final XOR:** None
 
 ---
 
