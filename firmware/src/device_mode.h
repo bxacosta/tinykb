@@ -2,11 +2,11 @@
  * device_mode.h - Device mode state machine
  *
  * Manages device mode transitions between Programming and Keyboard modes.
- * Determines startup behavior based on watchdog reset and EEPROM mode flag.
+ * Uses MCUSR/GPIOR0 watchdog reset detection for mode selection.
  *
  * Mode Detection:
- *   - Watchdog reset + mode flag 0x4B -> Keyboard mode
- *   - Any other condition -> Programming mode (5s timeout)
+ *   - Watchdog reset (WDRF in MCUSR/GPIOR0) -> Keyboard mode
+ *   - Any other reset source -> Programming mode (5s timeout)
  */
 
 #ifndef DEVICE_MODE_H

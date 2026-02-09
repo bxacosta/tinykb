@@ -25,8 +25,7 @@
 /* Storage Header Layout                                                      */
 /* -------------------------------------------------------------------------- */
 
-#define STORAGE_HEADER_SIZE       8     /* Script header size in bytes     */
-#define STORAGE_MODE_FLAG_SIZE    1     /* Mode flag uses last EEPROM byte */
+#define STORAGE_HEADER_SIZE       8     /* Script header size in bytes */
 
 /* Header field offsets (all multi-byte fields are little-endian) */
 #define HEADER_OFFSET_VERSION     0     /* 1 byte  */
@@ -44,8 +43,7 @@
 
 #define STORAGE_EEPROM_SIZE       HW_EEPROM_SIZE
 #define STORAGE_SCRIPT_START      STORAGE_HEADER_SIZE
-#define STORAGE_MAX_SCRIPT_SIZE   (STORAGE_EEPROM_SIZE - STORAGE_HEADER_SIZE - STORAGE_MODE_FLAG_SIZE)
-#define STORAGE_MODE_FLAG_ADDR    (STORAGE_EEPROM_SIZE - STORAGE_MODE_FLAG_SIZE)
+#define STORAGE_MAX_SCRIPT_SIZE   (STORAGE_EEPROM_SIZE - STORAGE_HEADER_SIZE)
 
 /* -------------------------------------------------------------------------- */
 /* Protocol Data Limits (Derived)                                             */

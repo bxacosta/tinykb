@@ -1,7 +1,7 @@
 /**
  * eeprom_storage.c - Script storage in EEPROM
  *
- * Provides low-level EEPROM access for script storage and mode flag management.
+ * Provides low-level EEPROM access for script storage.
  * Uses eeprom_update_byte() for writes to extend EEPROM lifespan.
  */
 
@@ -149,12 +149,3 @@ bool storage_verify_crc(uint16_t length, uint16_t expected_crc) {
     return crc == expected_crc;
 }
 
-/* Mode Flag */
-
-void storage_set_mode_flag(uint8_t flag) {
-    eeprom_update_byte((uint8_t *)STORAGE_MODE_FLAG_ADDR, flag);
-}
-
-uint8_t storage_get_mode_flag(void) {
-    return eeprom_read_byte((const uint8_t *)STORAGE_MODE_FLAG_ADDR);
-}

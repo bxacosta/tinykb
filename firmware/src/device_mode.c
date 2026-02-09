@@ -46,13 +46,14 @@ static device_mode_t current_mode;
 /* Mode Detection */
 
 static device_mode_t determine_initial_mode(void) {
-    uint8_t mcusr = MCUSR;
+    uint8_t reset_source = MCUSR;
+    if (reset_source == 0) {
+        reset_source = GPIOR0;
+    }
     MCUSR = 0;
-
     wdt_disable();
 
-    if ((mcusr & (1 << WDRF)) && storage_get_mode_flag() == MODE_FLAG_KEYBOARD) {
-        storage_set_mode_flag(0x00);
+    if (reset_source & _BV(WDRF)) {
         return DEVICE_MODE_KEYBOARD;
     }
 
@@ -164,6 +165,5 @@ bool device_mode_is_keyboard(void) {
 /* Mode Transitions */
 
 void device_mode_transition_to_keyboard(void) {
-    storage_set_mode_flag(MODE_FLAG_KEYBOARD);
     trigger_watchdog_reset();
 }

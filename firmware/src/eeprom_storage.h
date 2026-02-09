@@ -2,15 +2,13 @@
  * eeprom_storage.h - Script storage in EEPROM
  *
  * Handles reading/writing scripts with header validation and CRC16 integrity.
- * Also manages the mode flag for boot mode selection.
  *
  * Header format (8 bytes):
  *   version(1) + flags(1) + delay(2) + length(2) + crc16(2)
  *
  * EEPROM layout:
  *   [0x000 - 0x007] Header (8 bytes)
- *   [0x008 - 0x1FE] Script data (503 bytes max)
- *   [0x1FF]         Mode flag (1 byte)
+ *   [0x008 - 0x1FF] Script data (504 bytes max)
  */
 
 #ifndef EEPROM_STORAGE_H
@@ -18,12 +16,6 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-
-/* -------------------------------------------------------------------------- */
-/* Constants                                                                  */
-/* -------------------------------------------------------------------------- */
-
-#define MODE_FLAG_KEYBOARD 0x4B   /* 'K' - boot into keyboard mode */
 
 /* -------------------------------------------------------------------------- */
 /* Public API                                                                 */
@@ -51,10 +43,5 @@ void storage_invalidate_script(void);
 
 bool storage_has_valid_script(void);
 bool storage_verify_crc(uint16_t length, uint16_t expected_crc);
-
-/* Mode Flag */
-
-void storage_set_mode_flag(uint8_t flag);
-uint8_t storage_get_mode_flag(void);
 
 #endif /* EEPROM_STORAGE_H */
