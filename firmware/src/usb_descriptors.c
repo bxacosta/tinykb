@@ -21,7 +21,7 @@
 
 /* HID report descriptor lengths */
 #define HID_REPORT_LENGTH_KEYBOARD     63
-#define HID_REPORT_LENGTH_RAWHID       22
+#define HID_REPORT_LENGTH_RAWHID       29
 
 /* -------------------------------------------------------------------------- */
 /* Private                                                                    */
@@ -69,6 +69,9 @@ static const PROGMEM char config_descriptor_keyboard[] = {
     10                                      /* bInterval (10ms)   */
 };
 
+_Static_assert(sizeof(config_descriptor_keyboard) == CONFIG_TOTAL_LENGTH_KEYBOARD,
+               "Configuration descriptor length mismatch");
+
 /* Configuration Descriptor - Programming Mode (Raw HID) */
 
 static const PROGMEM char config_descriptor_rawhid[] = {
@@ -107,9 +110,12 @@ static const PROGMEM char config_descriptor_rawhid[] = {
     DESCRIPTOR_TYPE_ENDPOINT,               /* bDescriptorType    */
     0x81,                                   /* bEndpointAddress (IN 1) */
     0x03,                                   /* bmAttributes (Interrupt) */
-    PROTOCOL_REPORT_SIZE, 0,                /* wMaxPacketSize (LE)*/
+    8, 0,                                   /* wMaxPacketSize (LE)*/
     10                                      /* bInterval (10ms)   */
 };
+
+_Static_assert(sizeof(config_descriptor_rawhid) == CONFIG_TOTAL_LENGTH_RAWHID,
+               "Configuration descriptor length mismatch");
 
 /* HID Report Descriptor - Keyboard Mode (Boot Protocol, 63 bytes) */
 
@@ -157,7 +163,10 @@ static const PROGMEM char hid_report_keyboard[] = {
     0xC0                /* END_COLLECTION                            */
 };
 
-/* HID Report Descriptor - Programming Mode (Raw HID, 22 bytes) */
+_Static_assert(sizeof(hid_report_keyboard) == HID_REPORT_LENGTH_KEYBOARD,
+               "HID report descriptor length mismatch");
+
+/* HID Report Descriptor - Programming Mode (Raw HID, 29 bytes) */
 
 static const PROGMEM char hid_report_rawhid[] = {
     0x06, 0x00, 0xFF,   /* USAGE_PAGE (Vendor Defined 0xFF00)        */
@@ -172,9 +181,14 @@ static const PROGMEM char hid_report_rawhid[] = {
     0x81, 0x02,         /*   INPUT (Data,Var,Abs)                    */
     0x09, 0x01,         /*   USAGE (Vendor Usage 1)                  */
     0x91, 0x02,         /*   OUTPUT (Data,Var,Abs)                   */
+    0x09, 0x01,         /*   USAGE (Vendor Usage 1)                  */
+    0xB1, 0x02,         /*   FEATURE (Data,Var,Abs)                  */
 
     0xC0                /* END_COLLECTION                            */
 };
+
+_Static_assert(sizeof(hid_report_rawhid) == HID_REPORT_LENGTH_RAWHID,
+               "HID report descriptor length mismatch");
 
 /* -------------------------------------------------------------------------- */
 /* Public                                                                     */

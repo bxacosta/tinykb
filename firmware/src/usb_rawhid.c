@@ -19,6 +19,7 @@
 static uint8_t report_buffer[PROTOCOL_REPORT_SIZE];
 static uint8_t report_offset;
 static uint8_t expected_length;
+static uint8_t idle_rate;
 static bool response_pending;
 static bool had_activity;
 
@@ -32,6 +33,7 @@ void rawhid_init(void) {
     protocol_init();
     report_offset = 0;
     expected_length = 0;
+    idle_rate = 0;
     response_pending = false;
     had_activity = false;
 }
@@ -39,13 +41,11 @@ void rawhid_init(void) {
 /* USB Handlers */
 
 usbMsgLen_t rawhid_handle_setup(usbRequest_t *request) {
-    had_activity = true;
-
     switch (request->bRequest) {
         case USBRQ_HID_GET_REPORT:
             /* Host wants to read the response */
             if (response_pending) {
-                const protocol_response_t *resp = protocol_get_response();
+                const uint8_t *resp = protocol_get_response();
                 uint8_t len = protocol_get_response_length();
 
                 /* Copy response to return buffer */
@@ -63,12 +63,21 @@ usbMsgLen_t rawhid_handle_setup(usbRequest_t *request) {
 
         case USBRQ_HID_SET_REPORT:
             /* Host wants to send a command report */
+            had_activity = true;
             report_offset = 0;
             expected_length = request->wLength.word;
             if (expected_length > PROTOCOL_REPORT_SIZE) {
                 expected_length = PROTOCOL_REPORT_SIZE;
             }
             return USB_NO_MSG;  /* Call rawhid_handle_write for data */
+
+        case USBRQ_HID_SET_IDLE:
+            idle_rate = request->wValue.bytes[1];
+            return 0;
+
+        case USBRQ_HID_GET_IDLE:
+            usbMsgPtr = (usbMsgPtr_t)&idle_rate;
+            return 1;
 
         default:
             return 0;
@@ -96,7 +105,7 @@ usbMsgLen_t rawhid_handle_write(uint8_t *data, uint8_t length) {
 
 uint8_t rawhid_handle_read(uint8_t *data, uint8_t length) {
     /* Copy response data for GET_REPORT */
-    const protocol_response_t *resp = protocol_get_response();
+    const uint8_t *resp = protocol_get_response();
     uint8_t resp_len = protocol_get_response_length();
 
     uint8_t to_copy = (length < resp_len) ? length : resp_len;

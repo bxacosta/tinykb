@@ -18,7 +18,7 @@
 
 /* State */
 
-static protocol_response_t response;
+static uint8_t response[PROTOCOL_REPORT_SIZE];
 static uint8_t response_length;
 static uint16_t current_offset;
 static uint16_t running_crc;
@@ -27,12 +27,12 @@ static bool exit_requested;
 /* Helpers */
 
 static void set_ok_response(void) {
-    response.status = PROTOCOL_STATUS_OK;
+    response[0] = PROTOCOL_STATUS_OK;
     response_length = 1;
 }
 
 static void set_error_response(uint8_t status) {
-    response.status = status;
+    response[0] = status;
     response_length = 1;
 }
 
@@ -67,10 +67,10 @@ static void handle_write_command(const uint8_t *report) {
     /* Write bytes to EEPROM */
     storage_write_bytes(address, &report[5], (uint8_t)length);
 
-    /* Response: status + bytes_written */
-    response.status = PROTOCOL_STATUS_OK;
-    response.result1 = length;  /* bytes_written */
-    response_length = 3;  /* status(1) + bytes_written(2) */
+    /* Response: status(1) + bytes_written(2) */
+    response[0] = PROTOCOL_STATUS_OK;
+    write_le16(&response[1], length);
+    response_length = 3;
 }
 
 static void handle_read_command(const uint8_t *report) {
@@ -90,12 +90,12 @@ static void handle_read_command(const uint8_t *report) {
         return;
     }
 
-    /* Read bytes from EEPROM */
-    storage_read_bytes(address, response.data, (uint8_t)length);
+    /* Response: status(1) + bytes_read(2) + data(N) */
+    response[0] = PROTOCOL_STATUS_OK;
+    write_le16(&response[1], length);
+    storage_read_bytes(address, &response[3], (uint8_t)length);
 
-    response.status = PROTOCOL_STATUS_OK;
-    response.result1 = length;  /* bytes_read */
-    response_length = 3 + (uint8_t)length;  /* status + bytes_read(2) + data */
+    response_length = 3 + (uint8_t)length;
 }
 
 static void handle_append_command(const uint8_t *report) {
@@ -117,10 +117,10 @@ static void handle_append_command(const uint8_t *report) {
 
     current_offset += length;
 
-    /* Response: status + next_offset(2) + running_crc(2) */
-    response.status = PROTOCOL_STATUS_OK;
-    response.result1 = current_offset;
-    response.result2 = running_crc;
+    /* Response: status(1) + next_offset(2) + running_crc(2) */
+    response[0] = PROTOCOL_STATUS_OK;
+    write_le16(&response[1], current_offset);
+    write_le16(&response[3], running_crc);
     response_length = 5;
 }
 
@@ -179,18 +179,14 @@ static void handle_commit_command(const uint8_t *report) {
 }
 
 static void handle_status_command(void) {
-    /* Clear response buffer */
-    memset(&response, 0, sizeof(response));
+    memset(response, 0, sizeof(response));
 
-    response.status = PROTOCOL_STATUS_OK;
-
-    /* Build status response */
-    uint8_t *data = (uint8_t *)&response;
-    data[1] = PROTOCOL_FIRMWARE_VERSION;           /* FwVersion */
-    write_le16(&data[2], STORAGE_EEPROM_SIZE);     /* EEPROMSize */
-    data[4] = PROTOCOL_REPORT_SIZE;                /* ReportSize */
-    write_le16(&data[5], running_crc);             /* RunningCRC */
-    write_le16(&data[7], current_offset);          /* CurrentOffset */
+    response[0] = PROTOCOL_STATUS_OK;
+    response[1] = PROTOCOL_FIRMWARE_VERSION;           /* FwVersion */
+    write_le16(&response[2], STORAGE_EEPROM_SIZE);     /* EEPROMSize */
+    response[4] = PROTOCOL_REPORT_SIZE;                /* ReportSize */
+    write_le16(&response[5], running_crc);             /* RunningCRC */
+    write_le16(&response[7], current_offset);          /* CurrentOffset */
 
     response_length = PROTOCOL_REPORT_SIZE;
 }
@@ -261,8 +257,8 @@ void protocol_process_report(const uint8_t *report, uint8_t length) {
 
 /* Response Access */
 
-const protocol_response_t* protocol_get_response(void) {
-    return &response;
+const uint8_t* protocol_get_response(void) {
+    return response;
 }
 
 uint8_t protocol_get_response_length(void) {
