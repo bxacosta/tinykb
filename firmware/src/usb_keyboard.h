@@ -28,7 +28,6 @@ void keyboard_init(void);
 
 /* USB Maintenance */
 
-void keyboard_poll(void);
 bool keyboard_is_ready(void);
 bool keyboard_is_connected(void);
 
@@ -42,7 +41,7 @@ void keyboard_release_all(void);
 uint8_t keyboard_get_led_state(void);
 
 /* -------------------------------------------------------------------------- */
-/* Internal Handlers (called by usb_core.c)                                   */
+/* Internal Handlers (called by usb_dispatcher.c)                              */
 /* -------------------------------------------------------------------------- */
 
 #include "usbdrv.h"

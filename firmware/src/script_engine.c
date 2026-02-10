@@ -5,6 +5,7 @@
 #include "script_engine.h"
 #include "eeprom_storage.h"
 #include "config.h"
+#include "usb_core.h"
 #include "usb_keyboard.h"
 #include "keycode.h"
 #include "timer.h"
@@ -68,7 +69,7 @@ static void clear_all_keys(void) {
 
 static void send_report(void) {
     while (!keyboard_is_ready()) {
-        keyboard_poll();
+        usb_poll();
     }
     keyboard_send_report(engine.modifiers, engine.keys, engine.key_count);
 }
@@ -188,7 +189,7 @@ static void op_string(void) {
             op_tap(result.keycode);
         }
 
-        keyboard_poll();
+        usb_poll();
     }
 }
 
@@ -255,6 +256,14 @@ void engine_start(void) {
     if (!storage_has_valid_script()) {
         engine.state = ENGINE_IDLE;
         return;
+    }
+
+    uint16_t initial_delay = storage_get_initial_delay();
+    if (initial_delay > 0) {
+        uint16_t start = timer_millis();
+        while (!timer_elapsed(start, initial_delay)) {
+            usb_poll();
+        }
     }
 
     engine.ptr = 0;

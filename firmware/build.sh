@@ -36,6 +36,7 @@ avr-gcc $CFLAGS $INCLUDES -c ${SRC_DIR}/device_mode.c -o ${BUILD_DIR}/device_mod
 # Phase 3: USB layer
 avr-gcc $CFLAGS $INCLUDES -c ${SRC_DIR}/usb_descriptors.c -o ${BUILD_DIR}/usb_descriptors.o
 avr-gcc $CFLAGS $INCLUDES -c ${SRC_DIR}/usb_core.c -o ${BUILD_DIR}/usb_core.o
+avr-gcc $CFLAGS $INCLUDES -c ${SRC_DIR}/usb_dispatcher.c -o ${BUILD_DIR}/usb_dispatcher.o
 
 # Phase 4: Programming mode
 avr-gcc $CFLAGS $INCLUDES -c ${SRC_DIR}/hid_protocol.c -o ${BUILD_DIR}/hid_protocol.o

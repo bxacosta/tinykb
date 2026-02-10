@@ -32,7 +32,7 @@ static void build_report(uint8_t modifiers, const uint8_t *keys, uint8_t key_cou
 }
 
 /* -------------------------------------------------------------------------- */
-/* Internal Handlers (called by usb_core.c)                                   */
+/* Internal Handlers (called by usb_dispatcher.c)                              */
 /* -------------------------------------------------------------------------- */
 
 usbMsgLen_t keyboard_handle_setup(usbRequest_t *rq) {
@@ -94,10 +94,6 @@ void keyboard_init(void) {
 }
 
 /* USB Maintenance */
-
-void keyboard_poll(void) {
-    usbPoll();
-}
 
 bool keyboard_is_ready(void) {
     return usbInterruptIsReady();

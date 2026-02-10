@@ -7,23 +7,20 @@
 
 #include "device_mode.h"
 #include "eeprom_storage.h"
+#include "usb_core.h"
 #include "usb_keyboard.h"
 #include "usb_rawhid.h"
 #include "script_engine.h"
 #include "timer.h"
 #include "led.h"
-#include "usbdrv.h"
 
 #include <avr/io.h>
 #include <avr/wdt.h>
-#include <avr/interrupt.h>
-#include <util/delay.h>
 
 /* -------------------------------------------------------------------------- */
 /* Constants                                                                  */
 /* -------------------------------------------------------------------------- */
 
-#define USB_DISCONNECT_MS       300
 #define PROGRAMMING_TIMEOUT_MS  5000
 
 /* -------------------------------------------------------------------------- */
@@ -67,28 +64,18 @@ static void trigger_watchdog_reset(void) {
     }
 }
 
-/* USB Initialization */
-
-static void init_usb(void) {
-    cli();
-    PORTB &= ~(_BV(USB_CFG_DMINUS_BIT) | _BV(USB_CFG_DPLUS_BIT));
-    usbDeviceDisconnect();
-    _delay_ms(USB_DISCONNECT_MS);
-    usbDeviceConnect();
-    usbInit();
-    sei();
-}
-
 /* Mode Loops */
 
 static void run_programming_loop(void) {
-    init_usb();
+    usb_init();
     rawhid_init();
+
+    led_on();
 
     uint16_t timeout_start = timer_millis();
 
     for (;;) {
-        usbPoll();
+        usb_poll();
 
         if (rawhid_should_exit()) {
             device_mode_transition_to_keyboard();
@@ -101,29 +88,21 @@ static void run_programming_loop(void) {
 }
 
 static void run_keyboard_loop(void) {
-    init_usb();
+    usb_init();
     keyboard_init();
     engine_init();
 
-    /* Wait for USB enumeration */
+    led_off();
+
     while (!keyboard_is_connected()) {
-        keyboard_poll();
+        usb_poll();
     }
 
-    /* Execute script if valid */
-    if (storage_has_valid_script()) {
-        uint16_t initial_delay = storage_get_initial_delay();
-        if (initial_delay > 0) {
-            uint16_t start = timer_millis();
-            while (!timer_elapsed(start, initial_delay)) {
-                keyboard_poll();
-            }
-        }
-        engine_start();
-    }
+    led_blink(2, 100, 100);
+    engine_start();
 
     for (;;) {
-        keyboard_poll();
+        usb_poll();
         engine_tick();
     }
 }
@@ -136,12 +115,6 @@ static void run_keyboard_loop(void) {
 
 void device_mode_init(void) {
     current_mode = determine_initial_mode();
-
-    if (current_mode == DEVICE_MODE_PROGRAMMING) {
-        led_on();
-    } else {
-        led_off();
-    }
 }
 
 void device_mode_run(void) {

@@ -30,7 +30,7 @@
 /* Public API                                                                 */
 /* -------------------------------------------------------------------------- */
 
-/* Descriptor Access (called by usb_core.c via usbFunctionDescriptor) */
+/* Descriptor Access (called by usb_dispatcher.c via usbFunctionDescriptor) */
 
 usbMsgLen_t descriptors_get_configuration(void);
 usbMsgLen_t descriptors_get_hid(void);

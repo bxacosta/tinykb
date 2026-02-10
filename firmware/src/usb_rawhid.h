@@ -20,7 +20,7 @@
 
 void rawhid_init(void);
 
-/* USB Handlers (called by usb_core.c) */
+/* USB Handlers (called by usb_dispatcher.c) */
 
 usbMsgLen_t rawhid_handle_setup(usbRequest_t *request);
 usbMsgLen_t rawhid_handle_write(uint8_t *data, uint8_t length);
