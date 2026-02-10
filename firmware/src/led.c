@@ -5,6 +5,7 @@
  */
 
 #include "led.h"
+#include "timer.h"
 
 #include <avr/io.h>
 
@@ -36,3 +37,30 @@ void led_toggle(void) {
 bool led_is_on(void) {
     return (PORTB & (1 << LED_PIN)) != 0;
 }
+
+/* Status Indication */
+
+void led_blink(uint8_t count, uint16_t on_ms, uint16_t off_ms) {
+    bool initial_state = led_is_on();
+    
+    for (uint8_t i = 0; i < count; i++) {
+        led_on();
+        uint16_t start = timer_millis();
+        while (!timer_elapsed(start, on_ms)) {
+            /* Wait */
+        }
+        
+        led_off();
+        start = timer_millis();
+        while (!timer_elapsed(start, off_ms)) {
+            /* Wait */
+        }
+    }
+    
+    if (initial_state) {
+        led_on();
+    } else {
+        led_off();
+    }
+}
+

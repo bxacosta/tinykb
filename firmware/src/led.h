@@ -32,4 +32,8 @@ void led_off(void);
 void led_toggle(void);
 bool led_is_on(void);
 
+/* Status Indication */
+
+void led_blink(uint8_t count, uint16_t on_ms, uint16_t off_ms);
+
 #endif /* LED_H */
