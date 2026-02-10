@@ -76,7 +76,7 @@ All communication uses 32-byte HID reports with no Report ID. All multi-byte val
 
 ### WRITE (0x01)
 
-Writes bytes to storage area at specified offset. Does not update running CRC.
+Writes bytes to absolute storage address. DOES NOT update running CRC.
 
 **Format:** `WRITE(offset: uint16_le, length: uint16_le, data: bytes)`
 
@@ -99,7 +99,7 @@ Writes bytes to storage area at specified offset. Does not update running CRC.
 **Constraints:**
 
 - Data length limited by report payload capacity
-- Offset must not exceed storage boundaries
+- Offset must be a valid absolute storage address, within storage area
 
 **Status:**
 
@@ -117,7 +117,7 @@ Writes bytes to storage area at specified offset. Does not update running CRC.
 
 ### READ (0x02)
 
-Reads bytes from storage area at specified offset.
+Reads bytes from absolute storage address.
 
 **Format:** `READ(offset: uint16_le, length: uint16_le)`
 
@@ -140,7 +140,7 @@ Reads bytes from storage area at specified offset.
 **Constraints:**
 
 - Read length limited by response payload capacity
-- Offset must not exceed storage boundaries
+- Offset must be a valid absolute storage address, within storage area
 
 **Status:**
 
@@ -157,7 +157,7 @@ Reads bytes from storage area at specified offset.
 
 ### APPEND (0x03)
 
-Writes data at current offset position while computing CRC incrementally. Enables chunked transfers.
+Writes data at current offset (starts after the protocol header). Computes CRC incrementally.
 
 **Format:** `APPEND(length: uint16_le, data: bytes)`
 

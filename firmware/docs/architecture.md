@@ -63,17 +63,17 @@ mode until `CMD_EXIT` is sent.
         |                      |                       |
         v                      v                       v
 +----------------+    +----------------+    +----------------------+
-|  device_mode   |    |     timer      |    |   eeprom_storage     |
-|  (mode state)  |    | (timing utils) |    |  (script storage)    |
+|  device_mode   |--->|    usb_core    |    |   eeprom_storage     |
+|  (mode state)  |    | (lifecycle)    |    |  (script storage)    |
 +----------------+    +----------------+    +----------------------+
-        |
-        v
+        |                      |                       ^  
+        v                      v                       |
 +------------------------------------------------------------------+
-|                           usb_core                               |
+|                        usb_dispatcher                            |
 |              (V-USB callbacks, request routing)                  |
 +------------------------------------------------------------------+
-        |                                              |
-        v                                              v
+                               |
+                               v
 +--------------------+                      +----------------------+
 |   usb_rawhid       |                      |    usb_keyboard      |
 | (Programming Mode) |                      |   (Keyboard Mode)    |
@@ -95,7 +95,7 @@ mode until `CMD_EXIT` is sent.
 +------------------------------------------------------------------+
 |                           Utility Modules                        |
 +------------------------------------------------------------------+
-|         crc16       |       oscillator      |         led        |
+|      timer     |      crc16     |   oscillator   |      led      |
 +---------------------+-----------------------+--------------------+
 ```
 
@@ -108,21 +108,22 @@ Level 0 (No project dependencies):
 ├── keycode.c/h
 ├── crc16.c/h
 ├── led.c/h
-└── oscillator.c/h
+├── oscillator.c/h
+└── usb_core.c/h        -> (V-USB)
 
 Level 1 (Depends on Level 0):
 ├── eeprom_storage.c/h  -> config.h, crc16.h
-└── device_mode.c/h     -> eeprom_storage.h, led.h
+└── usb_keyboard.c/h    -> (V-USB)
 
 Level 2 (Depends on Level 1):
-├── usb_descriptors.c/h -> device_mode.h
-├── usb_keyboard.c/h    -> (V-USB)
-└── usb_rawhid.c/h      -> config.h
-
-Level 3 (Depends on Level 2):
-├── usb_core.c/h        -> device_mode.h, usb_descriptors.h, usb_rawhid.h, usb_keyboard.h
+├── device_mode.c/h     -> eeprom_storage.h, led.h, usb_core.h, usb_keyboard.h, usb_rawhid.h
 ├── hid_protocol.c/h    -> config.h, eeprom_storage.h, crc16.h
 └── script_engine.c/h   -> config.h, eeprom_storage.h, keycode.h, timer.h
+
+Level 3 (Depends on Level 2):
+├── usb_rawhid.c/h      -> config.h, hid_protocol.h
+├── usb_descriptors.c/h -> device_mode.h, config.h
+└── usb_dispatcher.c/h  -> device_mode.h, usb_descriptors.h, usb_rawhid.h, usb_keyboard.h
 
 Level 4 (Top level):
 └── main.c              -> led.h, timer.h, eeprom_storage.h, device_mode.h
@@ -141,8 +142,10 @@ firmware/src/
 |   |-- device_mode.h
 |
 |-- USB Layer
-|   |-- usb_core.c          # V-USB callbacks dispatcher
+|   |-- usb_core.c          # USB lifecycle (init/poll)
 |   |-- usb_core.h
+|   |-- usb_dispatcher.c    # V-USB callbacks dispatcher
+|   |-- usb_dispatcher.h
 |   |-- usb_descriptors.c   # Dynamic USB descriptors (PROGMEM)
 |   |-- usb_descriptors.h
 |   |-- usbconfig.h         # V-USB configuration
@@ -295,7 +298,20 @@ interrupts.
 **Dependencies:** `eeprom_storage.h`, `usb_keyboard.h`, `usb_rawhid.h`, `script_engine.h`, `timer.h`, `led.h`,
 `usbdrv.h`
 
-### 3. usb_core.c/h (V-USB Dispatcher)
+### 3. usb_core.c/h (USB Lifecycle)
+
+**Purpose:** Encapsulates V-USB initialization and polling. Acts as the interface between the application layer and the V-USB driver.
+
+**Public API:**
+
+```c
+void usb_init(void);    /* Initialize V-USB (disconnect/connect sequence) */
+void usb_poll(void);    /* Poll V-USB driver */
+```
+
+**Dependencies:** `usbdrv.h`, `avr/io.h`
+
+### 4. usb_dispatcher.c/h (V-USB Dispatcher)
 
 **Purpose:** Implements V-USB callbacks and routes requests to the appropriate handler based on current device mode.
 
@@ -317,7 +333,7 @@ usbMsgLen_t usbFunctionDescriptor(struct usbRequest *request); /* Dynamic descri
 
 **Dependencies:** `device_mode.h`, `usb_descriptors.h`, `usb_rawhid.h`, `usb_keyboard.h`
 
-### 4. usb_descriptors.c/h (Dynamic Descriptors)
+### 5. usb_descriptors.c/h (Dynamic Descriptors)
 
 **Purpose:** Provides USB descriptors based on current device mode. All descriptors are stored in PROGMEM.
 
@@ -346,7 +362,7 @@ usbMsgLen_t descriptors_get_hid_report(void);      /* HID report descriptor */
 
 **Dependencies:** `device_mode.h`
 
-### 5. usb_rawhid.c/h (Programming Mode USB)
+### 6. usb_rawhid.c/h (Programming Mode USB)
 
 **Purpose:** Handles Raw HID USB communication. Receives SET_REPORT data from host, buffers it, dispatches complete
 reports to `hid_protocol`, and returns responses via GET_REPORT.
@@ -365,7 +381,7 @@ bool rawhid_had_activity(void);                                      /* Any repo
 
 **Dependencies:** `config.h`, `hid_protocol.h`
 
-### 6. hid_protocol.c/h (Command Processing)
+### 7. hid_protocol.c/h (Command Processing)
 
 **Purpose:** Implements the HID report protocol for programming scripts via WebHID. See
 `firmware/spec/hid-report-protocol.md` for full protocol specification.
@@ -398,13 +414,13 @@ bool protocol_exit_requested(void);                                /* CMD_EXIT f
 - `running_crc` (uint16_t): Accumulated CRC of appended bytes
 - `exit_requested` (bool): Set by CMD_EXIT
 
-**Important:** WRITE, READ, and APPEND use **script-relative offsets** (0 = first byte of script area). The storage
-module internally adds `STORAGE_SCRIPT_START` (8) to convert to absolute EEPROM addresses. Address validation uses
-`STORAGE_MAX_SCRIPT_SIZE` (504) as the upper bound.
+**Important:**
+- `WRITE` and `READ` commands use **absolute EEPROM addresses** (0x0000 - 0x01FF). The protocol handler validates that operations stay within valid ranges.
+- `APPEND` uses an internal `current_offset` which is **script-relative**. The handler adds `STORAGE_SCRIPT_START` (8) before writing to storage.
 
 **Dependencies:** `config.h`, `eeprom_storage.h`, `crc16.h`
 
-### 7. usb_keyboard.c/h (Keyboard Mode USB)
+### 8. usb_keyboard.c/h (Keyboard Mode USB)
 
 **Purpose:** Handles Boot Protocol HID keyboard communication. Manages the 8-byte keyboard report buffer and USB
 interrupt transfers.
@@ -444,7 +460,7 @@ initialization is handled separately by `device_mode.c:init_usb()`.
 
 **Dependencies:** V-USB driver (`usbdrv.h`)
 
-### 8. script_engine.c/h (Bytecode Interpreter)
+### 9. script_engine.c/h (Bytecode Interpreter)
 
 **Purpose:** Executes scripts stored in EEPROM. Reads bytecode opcodes and performs keyboard actions. Must be called
 cooperatively from the main loop via `engine_tick()`.
@@ -488,7 +504,7 @@ bool engine_is_running(void);
 
 **Dependencies:** `config.h`, `eeprom_storage.h`, `usb_keyboard.h`, `keycode.h`, `timer.h`
 
-### 9. eeprom_storage.c/h (Script Storage)
+### 10. eeprom_storage.c/h (Script Storage)
 
 **Purpose:** Manages EEPROM read/write operations with header validation and CRC integrity.
 
@@ -511,15 +527,19 @@ Offset  Size  Field
 /* Lifecycle */
 void storage_init(void);
 
-/* Reading (offset is script-relative: 0 = first script byte at EEPROM address 8) */
-uint8_t storage_read_byte(uint16_t offset);
-void storage_read_bytes(uint16_t offset, uint8_t *buffer, uint8_t length);
+/* Reading (Absolute EEPROM address) */
+uint8_t storage_read_byte(uint16_t address);
+void storage_read_bytes(uint16_t address, uint8_t *buffer, uint8_t length);
+
+/* Script Metadata */
 uint16_t storage_get_script_length(void);
 uint16_t storage_get_initial_delay(void);      /* Returns delay in ms (stored value × 100) */
 
-/* Writing (offset is script-relative) */
-void storage_write_byte(uint16_t offset, uint8_t value);
-void storage_write_bytes(uint16_t offset, const uint8_t *data, uint8_t length);
+/* Writing (Absolute EEPROM address) */
+void storage_write_byte(uint16_t address, uint8_t value);
+void storage_write_bytes(uint16_t address, const uint8_t *data, uint8_t length);
+
+/* Header Operations */
 void storage_write_header(uint8_t version, uint8_t flags, uint16_t delay, uint16_t length, uint16_t crc);
 void storage_invalidate_script(void);          /* Sets LENGTH to 0 */
 
@@ -529,15 +549,13 @@ bool storage_verify_crc(uint16_t length, uint16_t expected_crc);
 
 ```
 
-**Important:** `storage_read_byte(offset)` and `storage_write_byte(offset)` use **script-relative offsets**. Internally,
-the functions add `STORAGE_SCRIPT_START` (8) to convert to absolute EEPROM addresses. Callers should pass offset 0 for
-the first script byte.
+**Important:** `storage_read_byte` and `storage_write_byte` use **absolute EEPROM addresses**. Callers are responsible for calculating correct addresses. The module prevents writes outside valid EEPROM range.
 
 All writes use `eeprom_update_byte()` (only writes if value differs) to minimize EEPROM wear.
 
 **Dependencies:** `config.h`, `crc16.h`
 
-### 10. keycode.c/h (ASCII to HID Keycode)
+### 11. keycode.c/h (ASCII to HID Keycode)
 
 **Purpose:** Converts ASCII characters (0x00-0x7F) to USB HID keycodes with modifier information. Uses US keyboard
 layout. Provides lookup via a PROGMEM table.
@@ -563,7 +581,7 @@ keys (`KEY_ENTER`, `KEY_TAB`, `KEY_BACKSPACE`, etc.), function keys (`KEY_F1`-`K
 
 **Dependencies:** None (standalone module)
 
-### 11. timer.c/h (Hardware Timer)
+### 12. timer.c/h (Hardware Timer)
 
 **Purpose:** Provides millisecond-resolution timing using Timer1 on the ATtiny85. Non-blocking design — callers must
 poll `usbPoll()` or `keyboard_poll()` during waits.
@@ -580,7 +598,7 @@ bool timer_elapsed(uint16_t start, uint16_t duration); /* Check if duration has 
 
 **Dependencies:** None (standalone module, uses AVR Timer1 hardware)
 
-### 12. crc16.c/h (CRC Calculation)
+### 13. crc16.c/h (CRC Calculation)
 
 **Purpose:** CRC-16-CCITT calculation for script integrity verification.
 
@@ -601,7 +619,7 @@ uint16_t crc16_finalize(uint16_t crc);               /* Return final CRC value *
 
 **Dependencies:** `config.h` (for `CRC16_INIT`, `CRC16_POLY`)
 
-### 13. oscillator.c/h (Oscillator Calibration)
+### 14. oscillator.c/h (Oscillator Calibration)
 
 **Purpose:** Calibrates the ATtiny85 internal RC oscillator for stable USB timing. Called automatically by V-USB during
 USB enumeration via `USB_RESET_HOOK`.
@@ -621,7 +639,7 @@ extern void calibrate_oscillator(void);
 
 **Dependencies:** V-USB driver (`usbMeasureFrameLength()`)
 
-### 14. led.c/h (LED Control)
+### 15. led.c/h (LED Control)
 
 **Purpose:** Controls the onboard LED on PB1 (Digispark LED). Used for mode indication: LED on = programming mode,
 LED off = keyboard mode.
@@ -703,8 +721,9 @@ See `firmware/spec/hid-report-protocol.md` for complete HID report protocol spec
 
 1. **No blocking delays in main loops** — All delays use cooperative polling with `keyboard_poll()` or `usbPoll()`
 2. **EEPROM writes use update semantics** — `eeprom_update_byte()` only writes if value differs, extending EEPROM life
-3. **Script-relative offsets** — Storage read/write functions take offsets relative to the script area start. The
-   storage module internally adds `STORAGE_SCRIPT_START` (8) to get the absolute EEPROM address
+3. **Absolute vs Relative Addressing** — `eeprom_storage` uses absolute EEPROM addresses. The protocol's `WRITE` and
+   `READ` commands expose absolute addressing to the host. `APPEND` operations are script-relative and offset by
+   `STORAGE_SCRIPT_START` (8) by the protocol handler.
 4. **Mode detection via MCUSR/GPIOR0** — Watchdog reset flag (WDRF) determines boot mode, no EEPROM flag needed
 5. **Watchdog reset for mode transition** — Simpler and faster than USB re-enumeration with V-USB
 6. **Script validation** — A script is valid when `VERSION == STORAGE_PAYLOAD_VERSION` (0x1A) AND `LENGTH > 0`
