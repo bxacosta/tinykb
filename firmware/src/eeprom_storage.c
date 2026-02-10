@@ -1,7 +1,7 @@
 /**
- * eeprom_storage.c - Script storage in EEPROM
+ * eeprom_storage.c - EEPROM storage abstraction
  *
- * Provides low-level EEPROM access for script storage.
+ * Provides unified access to EEPROM using absolute addresses.
  * Uses eeprom_update_byte() for writes to extend EEPROM lifespan.
  */
 
@@ -63,51 +63,42 @@ void storage_init(void) {
     validate_header();
 }
 
-/* Reading */
+/* Byte Access */
 
-uint8_t storage_read_byte(uint16_t offset) {
-    if (offset >= STORAGE_MAX_SCRIPT_SIZE) {
+uint8_t storage_read_byte(uint16_t address) {
+    if (address >= STORAGE_EEPROM_SIZE) {
         return 0xFF;
     }
-    return eeprom_read_byte((const uint8_t *)(STORAGE_SCRIPT_START + offset));
+    return eeprom_read_byte((const uint8_t *)address);
 }
 
-void storage_read_bytes(uint16_t offset, uint8_t *buffer, uint8_t length) {
-    for (uint8_t i = 0; i < length; i++) {
-        if (offset + i >= STORAGE_MAX_SCRIPT_SIZE) {
+void storage_write_byte(uint16_t address, uint8_t value) {
+    if (address < STORAGE_EEPROM_SIZE) {
+        eeprom_update_byte((uint8_t *)address, value);
+    }
+}
+
+/* Block Access */
+
+void storage_read_bytes(uint16_t address, uint8_t *buffer, uint16_t length) {
+    for (uint16_t i = 0; i < length; i++) {
+        if (address + i >= STORAGE_EEPROM_SIZE) {
             buffer[i] = 0xFF;
         } else {
-            buffer[i] = eeprom_read_byte((const uint8_t *)(STORAGE_SCRIPT_START + offset + i));
+            buffer[i] = eeprom_read_byte((const uint8_t *)(address + i));
         }
     }
 }
 
-uint16_t storage_get_script_length(void) {
-    return cache.valid ? cache.length : 0;
-}
-
-uint16_t storage_get_initial_delay(void) {
-    if (!cache.valid) {
-        return 0;
-    }
-    return cache.delay * 100;
-}
-
-/* Writing */
-
-void storage_write_byte(uint16_t offset, uint8_t value) {
-    if (offset < STORAGE_MAX_SCRIPT_SIZE) {
-        eeprom_update_byte((uint8_t *)(STORAGE_SCRIPT_START + offset), value);
-    }
-}
-
-void storage_write_bytes(uint16_t offset, const uint8_t *data, uint8_t length) {
-    for (uint8_t i = 0; i < length; i++) {
-        if (offset + i < STORAGE_MAX_SCRIPT_SIZE) {
-            eeprom_update_byte((uint8_t *)(STORAGE_SCRIPT_START + offset + i), data[i]);
+void storage_write_bytes(uint16_t address, const uint8_t *data, uint16_t length) {
+    for (uint16_t i = 0; i < length; i++) {
+        if (address + i < STORAGE_EEPROM_SIZE) {
+            eeprom_update_byte((uint8_t *)(address + i), data[i]);
         }
     }
 }
+
+/* Header Operations */
 
 void storage_write_header(uint8_t version, uint8_t flags, uint16_t delay, uint16_t length, uint16_t crc) {
     eeprom_update_byte((uint8_t *)HEADER_OFFSET_VERSION, version);
@@ -128,7 +119,20 @@ void storage_invalidate_script(void) {
     cache.length = 0;
 }
 
-/* Validation */
+/* Script Metadata */
+
+uint16_t storage_get_script_length(void) {
+    return cache.valid ? cache.length : 0;
+}
+
+uint16_t storage_get_initial_delay(void) {
+    if (!cache.valid) {
+        return 0;
+    }
+    return cache.delay * 100;
+}
+
+/* Script Validation */
 
 bool storage_has_valid_script(void) {
     return cache.valid;
@@ -141,11 +145,10 @@ bool storage_verify_crc(uint16_t length, uint16_t expected_crc) {
 
     uint16_t crc = crc16_init();
     for (uint16_t i = 0; i < length; i++) {
-        uint8_t byte = eeprom_read_byte((const uint8_t *)(STORAGE_SCRIPT_START + i));
+        uint8_t byte = storage_read_byte(STORAGE_SCRIPT_START + i);
         crc = crc16_update(crc, byte);
     }
     crc = crc16_finalize(crc);
 
     return crc == expected_crc;
 }
-

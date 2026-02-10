@@ -51,21 +51,21 @@ static void handle_write_command(const uint8_t *report) {
     uint16_t address = read_le16(&report[1]);
     uint16_t length = read_le16(&report[3]);
 
-    /* Validate address (script-relative offset) */
-    if (address >= STORAGE_MAX_SCRIPT_SIZE) {
+    /* Validate address (absolute EEPROM address) */
+    if (address >= STORAGE_EEPROM_SIZE) {
         set_error_response(PROTOCOL_STATUS_INVALID_ADDRESS);
         return;
     }
 
     /* Validate length */
     if (length == 0 || length > PROTOCOL_MAX_WRITE_DATA ||
-        (address + length) > STORAGE_MAX_SCRIPT_SIZE) {
+        (address + length) > STORAGE_EEPROM_SIZE) {
         set_error_response(PROTOCOL_STATUS_INVALID_LENGTH);
         return;
     }
 
-    /* Write bytes to EEPROM */
-    storage_write_bytes(address, &report[5], (uint8_t)length);
+    /* Write bytes to EEPROM (absolute address) */
+    storage_write_bytes(address, &report[5], length);
 
     /* Response: status(1) + bytes_written(2) */
     response[0] = PROTOCOL_STATUS_OK;
@@ -77,15 +77,15 @@ static void handle_read_command(const uint8_t *report) {
     uint16_t address = read_le16(&report[1]);
     uint16_t length = read_le16(&report[3]);
 
-    /* Validate address (script-relative offset) */
-    if (address >= STORAGE_MAX_SCRIPT_SIZE) {
+    /* Validate address (absolute EEPROM address) */
+    if (address >= STORAGE_EEPROM_SIZE) {
         set_error_response(PROTOCOL_STATUS_INVALID_ADDRESS);
         return;
     }
 
     /* Validate length */
     if (length == 0 || length > PROTOCOL_MAX_READ_DATA ||
-        (address + length) > STORAGE_MAX_SCRIPT_SIZE) {
+        (address + length) > STORAGE_EEPROM_SIZE) {
         set_error_response(PROTOCOL_STATUS_INVALID_LENGTH);
         return;
     }
@@ -93,7 +93,9 @@ static void handle_read_command(const uint8_t *report) {
     /* Response: status(1) + bytes_read(2) + data(N) */
     response[0] = PROTOCOL_STATUS_OK;
     write_le16(&response[1], length);
-    storage_read_bytes(address, &response[3], (uint8_t)length);
+    
+    /* Read bytes from EEPROM (absolute address) */
+    storage_read_bytes(address, &response[3], length);
 
     response_length = 3 + (uint8_t)length;
 }
@@ -111,7 +113,7 @@ static void handle_append_command(const uint8_t *report) {
     /* Write bytes and update CRC */
     for (uint16_t i = 0; i < length; i++) {
         uint8_t byte = report[3 + i];
-        storage_write_byte(current_offset + i, byte);
+        storage_write_byte(STORAGE_SCRIPT_START + current_offset + i, byte);
         running_crc = crc16_update(running_crc, byte);
     }
 
@@ -151,7 +153,7 @@ static void handle_commit_command(const uint8_t *report) {
         /* Read EEPROM and calculate CRC */
         calculated_crc = crc16_init();
         for (uint16_t i = 0; i < length; i++) {
-            uint8_t byte = storage_read_byte(i);
+            uint8_t byte = storage_read_byte(STORAGE_SCRIPT_START + i);
             calculated_crc = crc16_update(calculated_crc, byte);
         }
         calculated_crc = crc16_finalize(calculated_crc);

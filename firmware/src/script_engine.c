@@ -4,6 +4,7 @@
 
 #include "script_engine.h"
 #include "eeprom_storage.h"
+#include "config.h"
 #include "usb_keyboard.h"
 #include "keycode.h"
 #include "timer.h"
@@ -79,7 +80,7 @@ static uint8_t read_byte(void) {
         engine.state = ENGINE_ERROR;
         return OP_END;
     }
-    return storage_read_byte(engine.ptr++);
+    return storage_read_byte(STORAGE_SCRIPT_START + engine.ptr++);
 }
 
 static uint16_t read_u16(void) {
