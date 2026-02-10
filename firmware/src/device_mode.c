@@ -98,7 +98,7 @@ static void run_keyboard_loop(void) {
         usb_poll();
     }
 
-    led_blink(2, 100, 100);
+    led_blink(2, 80, 80, usb_poll);
     engine_start();
 
     for (;;) {

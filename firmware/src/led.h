@@ -34,6 +34,6 @@ bool led_is_on(void);
 
 /* Status Indication */
 
-void led_blink(uint8_t count, uint16_t on_ms, uint16_t off_ms);
+void led_blink(uint8_t count, uint16_t on_ms, uint16_t off_ms, void (*idle_callback)(void));
 
 #endif /* LED_H */

@@ -40,20 +40,24 @@ bool led_is_on(void) {
 
 /* Status Indication */
 
-void led_blink(uint8_t count, uint16_t on_ms, uint16_t off_ms) {
+void led_blink(uint8_t count, uint16_t on_ms, uint16_t off_ms, void (*idle_callback)(void)) {
     bool initial_state = led_is_on();
     
     for (uint8_t i = 0; i < count; i++) {
         led_on();
         uint16_t start = timer_millis();
         while (!timer_elapsed(start, on_ms)) {
-            /* Wait */
+            if (idle_callback) {
+                idle_callback();
+            }
         }
         
         led_off();
         start = timer_millis();
         while (!timer_elapsed(start, off_ms)) {
-            /* Wait */
+            if (idle_callback) {
+                idle_callback();
+            }
         }
     }
     
