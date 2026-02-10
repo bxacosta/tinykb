@@ -12,7 +12,7 @@ The firmware implements a single binary with two operating modes:
 | Programming | Raw HID (Usage 0xFF00)   | Accept scripts via WebHID     |
 | Keyboard    | Boot Protocol HID (0x01) | Execute scripts as keystrokes |
 
-Mode is determined at boot and transitions use a watchdog reset with an EEPROM mode flag.
+Mode is determined at boot using MCUSR/GPIOR0 watchdog reset detection and transitions use a watchdog reset.
 
 ## Device Flow
 
@@ -37,7 +37,6 @@ TinyKB Firmware Start
     v
 +---------------------------+
 |    Watchdog Reset         |
-|    (mode flag in EEPROM)  |
 +---------------------------+
     |
     v
@@ -196,13 +195,11 @@ All shared constants are defined in `config.h`. Module-specific constants remain
 | **Protocol** | `PROTOCOL_REPORT_SIZE`      | 32     | HID report size                    |
 | **Protocol** | `PROTOCOL_FIRMWARE_VERSION` | 0x01   | For STATUS response                |
 | **Header**   | `STORAGE_HEADER_SIZE`       | 8      | Script header size                 |
-| **Header**   | `STORAGE_MODE_FLAG_SIZE`    | 1      | Boot mode flag                     |
 | **Header**   | `STORAGE_PAYLOAD_VERSION`   | 0x1A   | Payload format version identifier  |
 | **Header**   | `HEADER_OFFSET_*`           | 0-6    | VERSION, FLAGS, DELAY, LENGTH, CRC |
 | **Derived**  | `STORAGE_EEPROM_SIZE`       | 512    | = `HW_EEPROM_SIZE`                 |
 | **Derived**  | `STORAGE_SCRIPT_START`      | 8      | = `STORAGE_HEADER_SIZE`            |
-| **Derived**  | `STORAGE_MAX_SCRIPT_SIZE`   | 503    | EEPROM - header - mode flag        |
-| **Derived**  | `STORAGE_MODE_FLAG_ADDR`    | 511    | Last byte of EEPROM                |
+| **Derived**  | `STORAGE_MAX_SCRIPT_SIZE`   | 504    | EEPROM - header                    |
 | **Derived**  | `PROTOCOL_MAX_WRITE_DATA`   | 27     | Report size - overhead(5)          |
 | **Derived**  | `PROTOCOL_MAX_READ_DATA`    | 29     | Report size - overhead(3)          |
 | **Derived**  | `PROTOCOL_MAX_APPEND_DATA`  | 29     | Report size - overhead(3)          |
@@ -214,7 +211,6 @@ All shared constants are defined in `config.h`. Module-specific constants remain
 | Module              | Constants                                               | Reason                |
 |---------------------|---------------------------------------------------------|-----------------------|
 | `hid_protocol.h`    | `PROTOCOL_CMD_*`, `PROTOCOL_STATUS_*`, `PROTOCOL_OPT_*` | Command codes         |
-| `eeprom_storage.h`  | `MODE_FLAG_KEYBOARD` (0x4B)                             | Module-specific value |
 | `led.h`             | `LED_PIN` (PB1)                                         | Hardware pin          |
 | `usb_keyboard.h`    | `KEYBOARD_REPORT_SIZE`, `KEYBOARD_MAX_KEYS`             | Keyboard-specific     |
 | `usb_descriptors.h` | `DESCRIPTOR_TYPE_*`                                     | USB descriptor types  |
@@ -253,7 +249,7 @@ void device_mode_init(void);                    /* Detect mode, set LED */
 void device_mode_run(void);                     /* Run mode loop (never returns) */
 bool device_mode_is_programming(void);          /* Query current mode */
 bool device_mode_is_keyboard(void);             /* Query current mode */
-void device_mode_transition_to_keyboard(void);  /* Set flag + watchdog reset */
+void device_mode_transition_to_keyboard(void);  /* Watchdog reset */
 ```
 
 **Internal types and functions (private to .c):**
@@ -261,7 +257,7 @@ void device_mode_transition_to_keyboard(void);  /* Set flag + watchdog reset */
 ```c
 typedef enum { DEVICE_MODE_PROGRAMMING, DEVICE_MODE_KEYBOARD } device_mode_t;
 
-static device_mode_t determine_initial_mode(void);  /* Check MCUSR + mode flag */
+static device_mode_t determine_initial_mode(void);  /* Check MCUSR/GPIOR0 */
 static void trigger_watchdog_reset(void);            /* wdt_enable + infinite loop */
 static void init_usb(void);                          /* Shared USB disconnect/connect/init */
 static void run_programming_loop(void);              /* Raw HID loop with 5s timeout */
@@ -270,10 +266,10 @@ static void run_keyboard_loop(void);                 /* Script execution loop */
 
 **Mode detection logic:**
 
-1. Read `MCUSR` to check reset source, then clear it
-2. Disable watchdog immediately
-3. If watchdog reset (`WDRF` bit) AND mode flag == `0x4B`:
-    - Clear mode flag, return `DEVICE_MODE_KEYBOARD`
+1. Read reset source from MCUSR (falls back to GPIOR0 if MCUSR is zero, which happens when Micronucleus
+   bootloader clears MCUSR but saves it to GPIOR0 via `SAVE_MCUSR`)
+2. Clear MCUSR and disable watchdog
+3. If WDRF bit is set in reset source: return `DEVICE_MODE_KEYBOARD`
 4. Otherwise: return `DEVICE_MODE_PROGRAMMING`
 
 **USB initialization (`init_usb`):**
@@ -295,12 +291,6 @@ interrupts.
 3. Apply initial delay if configured (cooperative wait with `keyboard_poll()`)
 4. `engine_start()` if valid script exists
 5. Main loop: `keyboard_poll()` + `engine_tick()`
-
-**EEPROM usage:**
-
-- Address `0x1FF` (last byte): Mode flag
-- Value `0x4B` ('K'): Boot into keyboard mode
-- Any other value: Boot into programming mode
 
 **Dependencies:** `eeprom_storage.h`, `usb_keyboard.h`, `usb_rawhid.h`, `script_engine.h`, `timer.h`, `led.h`,
 `usbdrv.h`
@@ -343,7 +333,7 @@ usbMsgLen_t descriptors_get_hid_report(void);      /* HID report descriptor */
 
 | Mode        | Interface Class | Subclass    | Protocol        | Usage Page             | Report Descriptor |
 |-------------|-----------------|-------------|-----------------|------------------------|-------------------|
-| Programming | 0x03 (HID)      | 0x00 (None) | 0x00 (None)     | 0xFF00 (Vendor)        | 22 bytes          |
+| Programming | 0x03 (HID)      | 0x00 (None) | 0x00 (None)     | 0xFF00 (Vendor)        | 29 bytes          |
 | Keyboard    | 0x03 (HID)      | 0x01 (Boot) | 0x01 (Keyboard) | 0x01 (Generic Desktop) | 63 bytes          |
 
 **usbconfig.h integration:** Dynamic descriptors are enabled via:
@@ -397,7 +387,7 @@ bool rawhid_had_activity(void);                                      /* Any repo
 ```c
 void protocol_init(void);                                          /* Reset state */
 void protocol_process_report(const uint8_t *report, uint8_t length); /* Dispatch command */
-const protocol_response_t* protocol_get_response(void);            /* Get response */
+const uint8_t* protocol_get_response(void);                        /* Get response */
 uint8_t protocol_get_response_length(void);                        /* Response size */
 bool protocol_exit_requested(void);                                /* CMD_EXIT flag */
 ```
@@ -410,7 +400,7 @@ bool protocol_exit_requested(void);                                /* CMD_EXIT f
 
 **Important:** WRITE, READ, and APPEND use **script-relative offsets** (0 = first byte of script area). The storage
 module internally adds `STORAGE_SCRIPT_START` (8) to convert to absolute EEPROM addresses. Address validation uses
-`STORAGE_MAX_SCRIPT_SIZE` (503) as the upper bound.
+`STORAGE_MAX_SCRIPT_SIZE` (504) as the upper bound.
 
 **Dependencies:** `config.h`, `eeprom_storage.h`, `crc16.h`
 
@@ -512,8 +502,7 @@ Offset  Size  Field
 0x002   2     DELAY (initial delay × 100ms, little-endian)
 0x004   2     LENGTH (script length in bytes, little-endian)
 0x006   2     CRC16 (CRC of script data, little-endian)
-0x008   503   Script bytecode
-0x1FF   1     Mode flag (0x4B = keyboard mode)
+0x008   504   Script bytecode
 ```
 
 **Public API:**
@@ -538,9 +527,6 @@ void storage_invalidate_script(void);          /* Sets LENGTH to 0 */
 bool storage_has_valid_script(void);           /* VERSION == 0x1A AND LENGTH > 0 */
 bool storage_verify_crc(uint16_t length, uint16_t expected_crc);
 
-/* Mode Flag (direct EEPROM address, not script-relative) */
-void storage_set_mode_flag(uint8_t flag);
-uint8_t storage_get_mode_flag(void);
 ```
 
 **Important:** `storage_read_byte(offset)` and `storage_write_byte(offset)` use **script-relative offsets**. Internally,
@@ -719,7 +705,7 @@ See `firmware/spec/hid-report-protocol.md` for complete HID report protocol spec
 2. **EEPROM writes use update semantics** — `eeprom_update_byte()` only writes if value differs, extending EEPROM life
 3. **Script-relative offsets** — Storage read/write functions take offsets relative to the script area start. The
    storage module internally adds `STORAGE_SCRIPT_START` (8) to get the absolute EEPROM address
-4. **Mode flag location** — At `STORAGE_MODE_FLAG_ADDR` (0x1FF, last byte of EEPROM), separate from script storage
+4. **Mode detection via MCUSR/GPIOR0** — Watchdog reset flag (WDRF) determines boot mode, no EEPROM flag needed
 5. **Watchdog reset for mode transition** — Simpler and faster than USB re-enumeration with V-USB
 6. **Script validation** — A script is valid when `VERSION == STORAGE_PAYLOAD_VERSION` (0x1A) AND `LENGTH > 0`
 7. **Script invalidation on COMMIT failure** — Sets LENGTH to 0 at `HEADER_OFFSET_LENGTH`

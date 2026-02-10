@@ -37,7 +37,6 @@ firmware/
 ### Prerequisites
 
 - AVR toolchain (avr-gcc, avr-objcopy, avr-size)
-- WSL or Linux environment
 
 ### Compilation
 
@@ -52,20 +51,16 @@ The build process:
 2. Links with V-USB library
 3. Generates `build/tinykb.hex` ready for flashing
 
-
 ## Flashing
 
 ### Requirements
 
-- Digispark/ATtiny85 with Micronucleus bootloader
-- micronucleus.exe flasher tool
+- Micronucleus command line tool
 
 ### Flash Commands
 
-**Windows:**
-
-```cmd
-micronucleus.exe --run build/tinykb.hex
+```bash
+micronucleus --run build/tinykb.hex
 ```
 
 ### Flashing Process
@@ -73,37 +68,13 @@ micronucleus.exe --run build/tinykb.hex
 1. Run flash command
 2. Connect Digispark within 60 seconds
 3. Firmware uploads automatically
-4. Device reconnects with new firmware
-
-## Hardware Configuration
-
-- **Target**: ATtiny85 @ 16.5MHz (internal RC oscillator)
-- **USB Pins**: `D-` on PB3, `D+` on PB4 (INT0)
-- **Bootloader**: Micronucleus v2.6 (occupies ~2KB flash)
-- **Available Flash**: ~6KB for application code
-
-### Memory Layout
-
-**Flash Usage:**
-
-- Application code: ~3.5KB
-- Bootloader: ~2KB
-- Available: ~2.5KB for expansion
-
-**EEPROM Usage:**
-
-- Script storage: 0-511 bytes
-- Header format: magic, version, flags, CRC16
-
-### USB Configuration
-
-- **Vendor ID**: 0x16c0 (voti.nl)
-- **Product ID**: 0x27db
-- **Device Class**: HID Keyboard
-- **Power**: Bus-powered, 100mA max
-- **Speed**: Low-speed USB 1.1
 
 ## References
+
+- [ATtiny85/Digispark hardware hardware reference](./docs/hardware-reference.md)
+- [Script Bytecode Specification](./docs/script-bytecode-specification.md)
+- [HID Programming Specification](./docs/hid-programming-specification.md)
+- [USB HID Keyboard Keycodes Reference](docs/hid-keycodes-reference.md)
 
 ### Development Tools
 
@@ -111,16 +82,6 @@ micronucleus.exe --run build/tinykb.hex
 - [AVR-Libc](https://github.com/avrdudes/avr-libc/): Standard library for AVR
 - [AVRDUDE](https://github.com/avrdudes/avrdude): AVR programming utility
 - [Micronucleus](https://github.com/micronucleus/micronucleus): USB bootloader for ATtiny85
-
-### Hardware Documentation
-
-- [ATtiny85 Datasheet](https://ww1.microchip.com/downloads/en/devicedoc/atmel-2586-avr-8-bit-microcontroller-attiny25-attiny45-attiny85_datasheet.pdf):
-  Official microcontroller datasheet
-
-### USB Implementation
-
-- [V-USB](https://www.obdev.at/products/vusb/index.html): Software-only USB driver for AVR
-- [USB HID Usage Tables](https://usb.org/document-library/hid-usage-tables-17): Official USB HID specification
 
 ### Reference Projects
 
