@@ -14,6 +14,43 @@ The firmware implements a single binary with two operating modes:
 
 Mode is determined at boot using MCUSR/GPIOR0 watchdog reset detection and transitions use a watchdog reset.
 
+## Design Decisions
+
+### Dual-Mode USB Architecture
+
+TinyKB employs a sequential dual-mode USB architecture to satisfy conflicting requirements: universal keyboard
+compatibility (Boot Protocol HID) and driverless browser access (WebHID). Since modern browser security policies block
+WebHID access to Boot Protocol keyboards, the device must alternate between two distinct USB identities.
+
+1. **Programming Mode (Raw HID 0xFF00):** Exposes a vendor-specific interface for WebHID script uploads.
+2. **Keyboard Mode (Boot Protocol HID 0x01):** Presents a standard keyboard interface compatible with BIOS/UEFI.
+
+#### Technical Rationale
+
+The sequential approach is selected over a composite device architecture due to specific hardware and software
+constraints:
+
+- **V-USB Stack Optimization:** V-USB is designed primarily for single-interface devices. A sequential approach avoids
+  the complexity and overhead of multiplexing endpoints in software.
+- **Resource Constraints:** The ATtiny85 has limited RAM (512 bytes). Managing multiple simultaneous HID report buffers
+  and state machines would exceed available resources.
+- **State Reliability:** Switching modes via a Watchdog Reset guarantees a clean system state, eliminating potential USB
+  descriptor caching issues or driver conflicts on the host.
+
+### Deployment and Bootloader Integration
+
+The firmware is designed to be compatible with various deployment scenarios, each offering different trade-offs in terms
+of transition speed and available storage.
+
+| Configuration   | Bootloader              | Transition Speed | Available Flash | Notes                                                               |
+|-----------------|-------------------------|------------------|-----------------|---------------------------------------------------------------------|
+| **Development** | Micronucleus (Standard) | ~5.4 seconds     | ~6 KB           | Default used by Digispark. 5s bootloader wait on every reset.       |
+| **Optimized**   | Micronucleus (Modified) | ~0.4 seconds     | ~6 KB           | Uses `ENTRY_POWER_ON` to skip bootloader on watchdog resets.        |
+| **Standalone**  | None (ISP Direct)       | ~0.4 seconds     | ~8 KB           | Maximum performance and space. Requires ISP programmer for updates. |
+
+The transition from Programming to Keyboard mode is triggered via a **Watchdog Reset**. This mechanism is reliable and
+avoids the need for persistent flags in EEPROM, preserving EEPROM longevity and maximizing space for user scripts.
+
 ## Device Flow
 
 ```
@@ -291,16 +328,18 @@ interrupts.
 
 1. `init_usb()` + `keyboard_init()` + `engine_init()`
 2. Wait for USB enumeration (`keyboard_is_connected()`)
-3. Apply initial delay if configured (cooperative wait with `keyboard_poll()`)
-4. `engine_start()` if valid script exists
-5. Main loop: `keyboard_poll()` + `engine_tick()`
+3. Blink LED to indicate connection (`led_blink()`)
+4. Apply initial delay if configured (cooperative wait with `keyboard_poll()`)
+5. `engine_start()` if valid script exists
+6. Main loop: `keyboard_poll()` + `engine_tick()`
 
 **Dependencies:** `eeprom_storage.h`, `usb_keyboard.h`, `usb_rawhid.h`, `script_engine.h`, `timer.h`, `led.h`,
 `usbdrv.h`
 
 ### 3. usb_core.c/h (USB Lifecycle)
 
-**Purpose:** Encapsulates V-USB initialization and polling. Acts as the interface between the application layer and the V-USB driver.
+**Purpose:** Encapsulates V-USB initialization and polling. Acts as the interface between the application layer and the
+V-USB driver.
 
 **Public API:**
 
@@ -415,8 +454,11 @@ bool protocol_exit_requested(void);                                /* CMD_EXIT f
 - `exit_requested` (bool): Set by CMD_EXIT
 
 **Important:**
-- `WRITE` and `READ` commands use **absolute EEPROM addresses** (0x0000 - 0x01FF). The protocol handler validates that operations stay within valid ranges.
-- `APPEND` uses an internal `current_offset` which is **script-relative**. The handler adds `STORAGE_SCRIPT_START` (8) before writing to storage.
+
+- `WRITE` and `READ` commands use **absolute EEPROM addresses** (0x0000 - 0x01FF). The protocol handler validates that
+  operations stay within valid ranges.
+- `APPEND` uses an internal `current_offset` which is **script-relative**. The handler adds `STORAGE_SCRIPT_START` (8)
+  before writing to storage.
 
 **Dependencies:** `config.h`, `eeprom_storage.h`, `crc16.h`
 
@@ -467,17 +509,17 @@ cooperatively from the main loop via `engine_tick()`.
 
 **Opcodes:**
 
-| Code | Opcode   | Arguments       | Description                 |
-|------|----------|-----------------|-----------------------------|
-| 0x00 | END      | -               | Stop script execution       |
-| 0x01 | DELAY    | duration(2)     | Wait for N milliseconds     |
-| 0x02 | KEY_DOWN | keycode(1)      | Press key                   |
-| 0x03 | KEY_UP   | keycode(1)      | Release key                 |
-| 0x04 | MOD      | modifier(1)     | Set modifier byte           |
-| 0x05 | TAP      | keycode(1)      | Press + release key         |
-| 0x06 | REPEAT   | count(2)        | Repeat previous instruction |
-| 0x07 | COMBO    | mod(1)+key(1)   | Modifier + key combination  |
-| 0x08 | STRING   | len(1)+chars(N) | Type ASCII string           |
+| Code | Opcode   | Arguments       | Description                     |
+|------|----------|-----------------|---------------------------------|
+| 0x00 | END      | -               | Stop script execution           |
+| 0x01 | DELAY    | duration(2)     | Wait for N milliseconds         |
+| 0x02 | KEY_DOWN | keycode(1)      | Press key                       |
+| 0x03 | KEY_UP   | keycode(1)      | Release key                     |
+| 0x04 | MOD      | modifier(1)     | Set modifier byte               |
+| 0x05 | TAP      | keycode(1)      | Press + release key             |
+| 0x06 | REPEAT   | count(1)+len(1) | Repeat next N bytes count times |
+| 0x07 | COMBO    | mod(1)+key(1)   | Modifier + key combination      |
+| 0x08 | STRING   | len(1)+chars(N) | Type ASCII string               |
 
 **Types:**
 
@@ -549,7 +591,8 @@ bool storage_verify_crc(uint16_t length, uint16_t expected_crc);
 
 ```
 
-**Important:** `storage_read_byte` and `storage_write_byte` use **absolute EEPROM addresses**. Callers are responsible for calculating correct addresses. The module prevents writes outside valid EEPROM range.
+**Important:** `storage_read_byte` and `storage_write_byte` use **absolute EEPROM addresses**. Callers are responsible
+for calculating correct addresses. The module prevents writes outside valid EEPROM range.
 
 All writes use `eeprom_update_byte()` (only writes if value differs) to minimize EEPROM wear.
 
@@ -658,6 +701,9 @@ void led_on(void);
 void led_off(void);
 void led_toggle(void);
 bool led_is_on(void);
+
+/* Status Indication */
+void led_blink(uint8_t count, uint16_t on_ms, uint16_t off_ms, void (*idle_callback)(void));
 ```
 
 **Dependencies:** None (standalone module, uses AVR GPIO)
