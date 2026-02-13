@@ -17,6 +17,27 @@ RISC architecture.
 | ADC Channels      | 4 (10-bit resolution)                      |
 | Interfaces        | USI (I2C / SPI)                            |
 
+### Fuse Configuration
+
+To compatible with Micronucleus and V-USB, the ATtiny85 'fuses' must be configured to enable the PLL clock and
+self-programming.
+
+| Fuse                 | Value  | Description                                                |
+|----------------------|--------|------------------------------------------------------------|
+| **Extended (EFUSE)** | `0xFE` | Self-programming enabled (required for bootloader updates) |
+| **High (HFUSE)**     | `0xDD` | Reset enabled, ISP programming enabled                     |
+| **Low (LFUSE)**      | `0xE1` | PLL Clock, 16 MHz, Start-up time 64ms                      |
+
+> [!WARNING]
+> **Do not set HFUSE to 0x5D (RSTDISBL)** unless you have a High Voltage Serial Programmer (HVSP). Setting this bit
+> converts the Reset pin (PB5) to a GPIO, permanently disabling standard ISP programming.
+
+**Flash Command (avrdude):**
+
+```bash
+avrdude -p t85 -c usbtiny -U lfuse:w:0xe1:m -U hfuse:w:0xdd:m -U efuse:w:0xfe:m
+```
+
 ### Digispark Pinout
 
 ```
